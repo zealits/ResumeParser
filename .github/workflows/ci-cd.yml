@@ -1,0 +1,79 @@
+name: Node.js CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20.x"
+
+      
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H dev.zealits.com >> ~/.ssh/known_hosts
+
+      # Step 7: Deploy to the server
+      - name: Deploy to server
+        if: github.ref == 'refs/heads/main'
+        run: |
+          ssh admin@dev.zealits.com << 'EOF'
+           echo "🔐 Starting deployment to remote server"
+
+           if [ -f ~/ResumeParser/.env ]; then
+             echo "📁 Backing up existing .env file"
+             cp ~/ResumeParser/.env ~/.env.bak
+           fi
+
+           if [ -d ~/ResumeParser ]; then
+             echo "📂 Pulling latest changes from Git"
+             cd ~/ResumeParser
+             git reset --hard
+             git pull origin main
+           else
+             echo "📂 Cloning repository"
+             git clone https://github.com/zealits/ResumeParser.git  
+             cd ~/ResumeParser 
+           fi
+
+           if [ -f ~/.env.bak ]; then
+             echo "♻️ Restoring .env from backup"
+             mv ~/.env.bak ~/ResumeParser/.env
+           fi
+
+           echo "📦 Installing Resume Parser dependencies"
+           cd ~/ResumeParser
+           pip install -r requirements.txt
+
+           
+           cd ~/ResumeParser
+           echo "🚀 Starting or restarting PM2 process"
+           if pm2 list | grep -q "ResumeParser"; then
+             echo "🔁 Restarting bulkpayout"
+             pm2 restart bulkpayout
+           else
+             echo "▶️ Starting ResumeParser"
+             pm2 start python --name "ResumeParser" -- run main.py
+           fi
+
+           echo "📋 PM2 process list:"
+           pm2 list
+          EOF
