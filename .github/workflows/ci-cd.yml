@@ -23,7 +23,6 @@ jobs:
         with:
           node-version: "20.x"
 
-      
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -67,11 +66,11 @@ jobs:
            cd ~/ResumeParser
            echo "🚀 Starting or restarting PM2 process"
            if pm2 list | grep -q "ResumeParser"; then
-             echo "🔁 Restarting bulkpayout"
-             pm2 restart bulkpayout
+             echo "🔁 Restarting ResumeParser"
+             pm2 restart ResumeParser
            else
              echo "▶️ Starting ResumeParser"
-             pm2 start python --name "ResumeParser" -- run main.py
+             pm2 start python3 --name "ResumeParser" -- run main.py
            fi
 
            echo "📋 PM2 process list:"
