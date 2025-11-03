@@ -22,7 +22,14 @@ load_dotenv()
 DATASET_DIR = "dataset"
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east-1")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Required for OpenAIEmbeddings
 EMB_MODEL = "text-embedding-3-large"
+
+# Verify required API keys are present
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable not set. Please set it in your .env file.")
+if not PINECONE_API_KEY:
+    raise ValueError("PINECONE_API_KEY environment variable not set. Please set it in your .env file.")
 
 # Pinecone index names
 PROFESSIONAL_INDEX = "professional-summary"

@@ -13,7 +13,16 @@ load_dotenv()
 
 class CandidateRetrievalPipeline:
     def __init__(self):
-        self.pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+        # Verify required API keys are present
+        pinecone_key = os.getenv("PINECONE_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+        
+        if not pinecone_key:
+            raise ValueError("PINECONE_API_KEY environment variable not set. Please set it in your .env file.")
+        if not openai_key:
+            raise ValueError("OPENAI_API_KEY environment variable not set. Please set it in your .env file.")
+        
+        self.pc = Pinecone(api_key=pinecone_key)
         self.embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
         
         # Index names
