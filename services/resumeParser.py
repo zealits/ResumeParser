@@ -6,6 +6,9 @@ import os
 from datetime import datetime
 from glob import glob
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # --- Configuration ---
 try:
     if not os.environ.get("OPENAI_API_KEY"):
