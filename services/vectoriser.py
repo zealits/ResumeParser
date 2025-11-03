@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import uuid
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
