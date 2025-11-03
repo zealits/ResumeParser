@@ -5,21 +5,15 @@ import re
 import os
 from datetime import datetime
 from glob import glob
-from dotenv import load_dotenv
 
 # --- Configuration ---
-# Load environment variables from .env file
-load_dotenv()
-
 try:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key or api_key == "your_openai_api_key_here":
-        raise ValueError("OPENAI_API_KEY not properly configured")
-    client = OpenAI(api_key=api_key)
-except (ValueError, TypeError) as e:
-    print("FATAL ERROR: OPENAI_API_KEY environment variable not set or invalid.")
-    print("Please set your OpenAI API key in the .env file.")
-    print(f"Error: {e}")
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise TypeError
+    client = OpenAI()
+except TypeError:
+    print("FATAL ERROR: OPENAI_API_KEY environment variable not set.")
+    print("Please set the environment variable before running the script.")
     exit()
 
 # --- PDF Text Extraction ---
@@ -39,7 +33,7 @@ def extract_text_from_pdf(pdf_path):
         return None
 
 # --- BULLETPROOF Date Parser ---
-def parse_any_fucking_date(date_str):
+def parse_any_date(date_str):
     """
     Parse ANY date format that appears in resumes - NO EXCUSES
     """
@@ -170,8 +164,8 @@ def calculate_total_experience(experience_data):
         if not start_str:
             continue
             
-        start_date = parse_any_fucking_date(start_str)
-        end_date = parse_any_fucking_date(end_str) if end_str else datetime.now()
+        start_date = parse_any_date(start_str)
+        end_date = parse_any_date(end_str) if end_str else datetime.now()
         
         # Validate dates
         if not start_date:
@@ -267,18 +261,17 @@ def parse_resume_with_genai(resume_text):
     Follow these rules strictly:
     1. Extract the information based ONLY on the text provided. Do not infer or add any information that is not present.
     2. If a specific field is not found in the resume, use a blank string "" for strings, or an empty list [] for lists.
-    3. The 'location' should be the location of the candidate if not mentioned, leave blank.
-    4. For the 'experience' section, the 'description' should be a concise summary of the key responsibilities and achievements from the text.
-    5. For education marks, extract ONLY numerical percentage (e.g., "85.5"). If marks are not in percentage format, leave blank.
-    6. Categorize education level based on the qualification:
+    3. For the 'experience' section, the 'description' should be a concise summary of the key responsibilities and achievements from the text.
+    4. For education marks, extract ONLY numerical percentage (e.g., "85.5"). If marks are not in percentage format, leave blank.
+    5. Categorize education level based on the qualification:
         -Secondary Education: 10th grade/high school
         -Higher Secondary: 12th grade/senior secondary
         -Undergraduate: Bachelor's degrees
         -Post Graduate: Master's degrees, PhD, etc.
         -Diploma / Vocational Education: Diploma courses, ITI, Polytechnic, Vocational or Certification programmes
         -Other / Unknown: Education entries that don't fit clearly into the above categories or require manual review
-    7. The output MUST be a valid JSON object. Do not include any text, explanations, or code formatting like ```json before or after the JSON object itself.
-    8. If project_skills, experiance_skills are not explicitly mentioned, generate them based on the description.
+    6. The output MUST be a valid JSON object. Do not include any text, explanations, or code formatting like ```json before or after the JSON object itself.
+    7. If project_skills, experiance_skills are not explicitly mentioned, generate them based on the description.
 
     IMPORTANT: For experience dates, extract them EXACTLY as they appear in the resume. Don't normalize them.
 
@@ -287,7 +280,6 @@ def parse_resume_with_genai(resume_text):
       "name": "string",
       "phone": "string",
       "mail": "string",
-      "location": "string (Location of the candidate)",
       "social": {{
         "github": "string (URL)",
         "linkedin": "string (URL)",
@@ -300,7 +292,6 @@ def parse_resume_with_genai(resume_text):
           "category": "string (Secondary Education, Higher Secondary, Undergraduate, Post Graduate)",
           "start": "string (Start Date as it appears in resume)",
           "end": "string (End Date as it appears in resume, use 'Present' if current)"
-          "grade": "string (Grade/Marks/Percentage/CGPA/etc.)"
         }}
       ],
       "skills": ["string", "string", ...],
@@ -308,8 +299,7 @@ def parse_resume_with_genai(resume_text):
         {{
           "title": "string",
           "description": "string",
-          "project_skills": ["string", "string", ...],
-          "project_link": "string (URL)"
+          "project_skills": ["string", "string", ...]
         }}
       ],
       "experience": [
@@ -318,7 +308,6 @@ def parse_resume_with_genai(resume_text):
           "designation": "string (Job Title)",
           "description": "string (Summary of responsibilities and achievements)",
           "experiance_skills": ["string", "string", ...],
-          "location": "string (Location of the company)",
           "start": "string (Start Date EXACTLY as it appears)",
           "end": "string (End Date EXACTLY as it appears)"
         }}

@@ -21,6 +21,7 @@ class Settings:
     # ===========================================
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     MONGODB_DATABASE: str = os.getenv("MONGODB_DATABASE", "resume_parser")
+    MONGO_COL: str = os.getenv("MONGO_COL", "candidates")  # Candidates collection name
     
     # ===========================================
     # JWT Authentication Configuration

@@ -13,6 +13,7 @@ class MongoDB:
         self.users_collection = None
         self.usage_collection = None
         self.api_calls_collection = None
+        self.candidates_collection = None
 
     async def connect(self):
         """Connect to MongoDB"""
@@ -28,6 +29,10 @@ class MongoDB:
             self.users_collection = self.database.users
             self.usage_collection = self.database.usage_stats
             self.api_calls_collection = self.database.api_calls
+            
+            # Initialize candidates collection (from environment or default)
+            candidates_col_name = os.getenv("MONGO_COL", "candidates")
+            self.candidates_collection = self.database[candidates_col_name]
             
             # Create indexes for better performance
             await self.create_indexes()
@@ -58,6 +63,10 @@ class MongoDB:
             await self.api_calls_collection.create_index("timestamp")
             await self.api_calls_collection.create_index("endpoint")
             await self.api_calls_collection.create_index([("user_id", 1), ("timestamp", 1)])
+            
+            # Candidates collection indexes
+            await self.candidates_collection.create_index("_id", unique=True)
+            await self.candidates_collection.create_index("created_at")
             
             print("✅ Database indexes created successfully")
             
