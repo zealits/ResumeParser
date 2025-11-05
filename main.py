@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 from services.resumeParser import extract_text_from_pdf, parse_resume_with_genai
 from services.vectoriser import pinecone_vectoriser
 from services.retrival import CandidateRetrievalPipeline
+from services.testgen import generate_test
+from services.evaluate import evaluate_test
 
 # Import authentication and database modules
 from auth import get_current_user, auth_manager
@@ -114,6 +116,101 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "resume-parser"}
+
+# ------------------------------------------------------------
+# Helper function: Extract candidate summary
+# ------------------------------------------------------------
+def extract_candidate_summary(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract candidate summary details from MongoDB document:
+    1) Highest qualification (only qualification + category)
+    2) Project - description + project_skills
+    3) Experience - designation + description + experience_skills
+    4) Certifications
+    """
+
+    # --- Highest Qualification ---
+    education_data = doc.get("education", [])
+    highest_qualification = None
+
+    if isinstance(education_data, list) and education_data:
+        education_rank = {
+            "post graduate": 4, "masters": 4, "master": 4,
+            "undergraduate": 3, "bachelor": 3, "be": 3, "b.tech": 3, "b.e.": 3,
+            "diploma": 2, "vocational": 2,
+            "higher secondary": 1, "hsc": 1, "12th": 1,
+            "secondary": 0, "ssc": 0, "10th": 0
+        }
+
+        best_edu, best_score = None, -1
+        for edu in education_data:
+            qual = str(edu.get("qualification", "")).lower()
+            for key, score in education_rank.items():
+                if key in qual and score > best_score:
+                    best_score = score
+                    best_edu = edu
+
+        highest_qualification = best_edu or education_data[0]
+
+        # Only keep qualification + category
+        highest_qualification = {
+            "qualification": highest_qualification.get("qualification", "Unknown"),
+            "category": highest_qualification.get("category", "Unknown")
+        }
+    else:
+        highest_qualification = {"qualification": "Not available", "category": "Not available"}
+
+    # --- Projects ---
+    projects_data = doc.get("projects", [])
+    projects: List[Dict[str, Any]] = []
+    if isinstance(projects_data, list):
+        for proj in projects_data:
+            description = proj.get("description", "No description provided.")
+            project_skills = (
+                proj.get("project_skills")
+                or proj.get("skills")
+                or proj.get("technologies")
+                or []
+            )
+            if isinstance(project_skills, str):
+                project_skills = [s.strip() for s in project_skills.split(",") if s.strip()]
+            projects.append({
+                "description": description,
+                "project_skills": project_skills
+            })
+
+    # --- Experience ---
+    experience_data = doc.get("experience", [])
+    experience: List[Dict[str, Any]] = []
+    if isinstance(experience_data, list):
+        for exp in experience_data:
+            designation = exp.get("designation", "Unknown Role")
+            description = exp.get("description", "No description provided.")
+            experience_skills = (
+                exp.get("experiance_skills")
+                or exp.get("skills")
+                or exp.get("technologies")
+                or []
+            )
+            if isinstance(experience_skills, str):
+                experience_skills = [s.strip() for s in experience_skills.split(",") if s.strip()]
+            experience.append({
+                "designation": designation,
+                "description": description,
+                "experience_skills": experience_skills
+            })
+
+    # --- Certifications ---
+    certifications = doc.get("certifications", [])
+    if not isinstance(certifications, list):
+        certifications = []
+
+    return {
+        "highest_qualification": highest_qualification,
+        "projects": projects,
+        "experience": experience,
+        "certifications": certifications
+    }
 
 @app.post("/parse-resume", summary="Parse resume PDF")
 async def parse_resume(
@@ -515,6 +612,168 @@ async def get_ranked_candidates(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving ranked candidates: {str(e)}"
         )
+
+@app.get("/candidate/{candidate_id}/summary", summary="Get candidate summary details")
+async def get_candidate_summary(
+    request: Request,
+    candidate_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Retrieve candidate summary details:
+    1) Highest qualification (only qualification + category)
+    2) Project - description + project_skills
+    3) Experience - designation + description + experience_skills
+    4) Certifications
+    """
+    # Set user in request state for middleware
+    request.state.user = current_user
+
+    doc = await db.candidates_collection.find_one({"_id": candidate_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    summary = extract_candidate_summary(doc)
+    return summary
+
+@app.get("/candidate/{candidate_id}/generate-test", summary="Generate candidate test")
+async def generate_candidate_test(
+    request: Request,
+    candidate_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Generate a technical test for a candidate based on their profile summary.
+    Takes candidate_id, extracts summary, sends to test generator, and returns generated test JSON.
+    """
+    # Set user in request state for middleware
+    request.state.user = current_user
+
+    try:
+        # Get candidate document from MongoDB
+        doc = await db.candidates_collection.find_one({"_id": candidate_id})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
+        # Extract candidate summary
+        candidate_summary = extract_candidate_summary(doc)
+
+        logger.info(f"Generating test for candidate: {candidate_id}")
+
+        # Generate test
+        test_output = generate_test(candidate_summary)
+
+        # Parse the JSON response (generate_test may return a JSON string with fences)
+        def _extract_json_string(s: str) -> str:
+            s = s.strip()
+            if s.startswith("```"):
+                s = s.lstrip("`")
+                s = s.split("\n", 1)[-1]
+                if s.rstrip().endswith("```"):
+                    s = s.rstrip().rstrip("`")
+            first = s.find("{")
+            last = s.rfind("}")
+            if first != -1 and last != -1 and last > first:
+                return s[first:last+1]
+            return s
+
+        try:
+            candidate_json_str = _extract_json_string(test_output)
+            test_json = json.loads(candidate_json_str)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse test JSON: {str(e)}")
+            logger.error(f"Raw output: {test_output}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to parse generated test JSON: {str(e)}"
+            )
+
+        logger.info(f"Successfully generated test for candidate: {candidate_id}")
+
+        return {
+            "success": True,
+            "candidate_id": candidate_id,
+            "test": test_json,
+            "message": "Test generated successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to generate test for candidate {candidate_id}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating test: {str(e)}"
+        )
+
+@app.post("/candidate/{candidate_id}/evaluate", summary="Evaluate candidate test submission")
+async def evaluate_candidate_test(
+    request: Request,
+    candidate_id: str,
+    payload: Dict[str, Any] = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Evaluate a candidate's answers for a given test.
+    Body expects:
+    {
+      "test": { ... },
+      "answers": { "mcqs": [...], "theory": [...] }
+    }
+    Returns only marks scored (total and breakdown) and saves to MongoDB.
+    """
+    # Set user in request state for middleware
+    request.state.user = current_user
+
+    try:
+        # Validate candidate exists
+        doc = await db.candidates_collection.find_one({"_id": candidate_id})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
+        test = payload.get("test")
+        answers = payload.get("answers")
+        if not isinstance(test, dict) or not isinstance(answers, dict):
+            raise HTTPException(status_code=400, detail="Invalid payload: 'test' and 'answers' objects are required")
+
+        # Evaluate
+        evaluation = evaluate_test(test, answers)
+
+        # Prepare record
+        record = {
+            "candidate_id": candidate_id,
+            "evaluation": evaluation,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+        # Save evaluation to candidate document (history + latest fields)
+        await db.candidates_collection.update_one(
+            {"_id": candidate_id},
+            {
+                "$push": {"test_evaluations": record},
+                "$set": {
+                    "latest_test_score": evaluation.get("total", {}).get("score", 0),
+                    "latest_test_max": evaluation.get("total", {}).get("max", 0),
+                    "latest_test_at": record["created_at"],
+                }
+            }
+        )
+
+        # Return only marks to frontend
+        return {
+            "success": True,
+            "candidate_id": candidate_id,
+            "marks": evaluation.get("total", {}),
+            "breakdown": {
+                "mcq": evaluation.get("mcq", {}).get("score", 0),
+                "theory": evaluation.get("theory", {}).get("score", 0)
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to evaluate test for candidate {candidate_id}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
