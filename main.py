@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from services.resumeParser import extract_text_from_pdf, parse_resume_with_genai
 from services.vectoriser import pinecone_vectoriser
 from services.retrival import CandidateRetrievalPipeline
+from services.project_retrieval import ProjectRetrievalPipeline
 from services.testgen import generate_test
 from services.evaluate import evaluate_test
 
@@ -102,7 +103,9 @@ app.add_middleware(UsageTrackingMiddleware, track_endpoints=[
     "/parse-resume", 
     "/parse-resume-text",
     "/register-json",
-    "/get-ranked-candidates"
+    "/get-ranked-candidates",
+    "/register-project",
+    "/candidate/{candidate_id}/relevant-projects"
 ])
 app.add_middleware(CORSHeadersMiddleware, allowed_origins=settings.ALLOWED_ORIGINS)
 
@@ -325,7 +328,7 @@ async def parse_resume_text(
         )
 
 # ------------------------------------------------------------
-# Candidate Management Endpoints (from main2.py)
+# Candidate Management Endpoints 
 # ------------------------------------------------------------
 
 @app.post("/register-json", status_code=201, summary="Register candidate JSON")
@@ -554,64 +557,7 @@ async def get_candidate_vectors(
         "name": doc.get("name", "Unknown")
     }
 
-@app.post("/get-ranked-candidates", summary="Get ranked candidates for project")
-async def get_ranked_candidates(
-    request: Request,
-    project_description: str = Body(..., description="Description of the project for matching"),
-    required_skills: List[str] = Body(..., description="List of required technical skills"),
-    filters: Dict[str, Any] = Body(
-        default={
-            "has_leadership": None,
-            "highest_education": None, 
-            "seniority_level": None
-        },
-        description="Filters for candidate search (use null for any filter to ignore it)"
-    ),
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Get ranked candidates based on project description and required skills across all three indexes.
-    Returns combined ranked results without saving to files.
-    
-    - **project_description**: Description of the project for matching
-    - **required_skills**: List of required technical skills
-    - **filters**: Filters for candidate search
-    """
-    # Set user in request state for middleware
-    request.state.user = current_user
-    
-    try:
-        # Initialize the retrieval pipeline
-        retrieval_pipeline = CandidateRetrievalPipeline()
-        
-        # Retrieve ranked candidates (this returns all candidates, not just top-k)
-        results = retrieval_pipeline.retrieve_ranked_candidates(
-            project_description=project_description,
-            required_skills=required_skills,
-            filters=filters
-        )
-        
-        # Return only the combined ranked results
-        return {
-            "success": True,
-            "project_description": project_description,
-            "required_skills": required_skills,
-            "filters_applied": filters,
-            "results_count": {
-                "professional_summary": len(results["professional_summary_ranked"]),
-                "project_portfolio": len(results["project_portfolio_ranked"]),
-                "skills_matrix": len(results["skills_matrix_ranked"]),
-                "combined": len(results["combined_ranked"])
-            },
-            "combined_ranked_results": results["combined_ranked"]
-        }
 
-    except Exception as e:
-        logger.exception("Failed to get ranked candidates")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving ranked candidates: {str(e)}"
-        )
 
 @app.get("/candidate/{candidate_id}/summary", summary="Get candidate summary details")
 async def get_candidate_summary(
@@ -775,6 +721,245 @@ async def evaluate_candidate_test(
         logger.exception(f"Failed to evaluate test for candidate {candidate_id}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/register-project", status_code=201, summary="Register project")
+async def register_project(
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Register a project with project_description and project_skills.
+    Stores in MongoDB and creates 2 vectors in Pinecone (project_description and project_skills).
+    
+    - **payload**: Project data with project_description and project_skills
+    """
+    # Set user in request state for middleware
+    request.state.user = current_user
+    
+    try:
+        # Validate required fields
+        project_description = payload.get("project_description", "")
+        project_skills = payload.get("project_skills", [])
+        
+        if not project_description:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="project_description is required"
+            )
+        
+        if not project_skills:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="project_skills is required (list or string)"
+            )
+        
+        # Generate project ID
+        project_id = str(uuid4())
+        payload_copy = dict(payload)
+        
+        # Add to Pinecone FIRST to get vector IDs
+        pinecone_result = pinecone_vectoriser.add_project(payload_copy, project_id)
+        
+        if not pinecone_result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to add project to Pinecone: {pinecone_result.get('error', 'Unknown error')}"
+            )
+        
+        # Now store in MongoDB WITH vector IDs
+        payload_copy["_id"] = project_id
+        payload_copy["created_at"] = datetime.utcnow().isoformat() + "Z"
+        payload_copy["vector_ids"] = pinecone_result["vector_ids"]  # Store vector IDs
+        payload_copy["pinecone_metadata"] = pinecone_result["metadata"]  # Store Pinecone metadata
+        
+        # Insert in MongoDB using async database connection
+        await db.projects_collection.insert_one(payload_copy)
+        logger.info(f"Saved project to MongoDB with id: {project_id}")
+        
+        logger.info(f"Successfully registered project: {project_id}")
+        logger.info(f"Vector IDs stored: {pinecone_result['vector_ids']}")
+        
+        return {
+            "success": True,
+            "project_id": project_id,
+            "vector_ids": pinecone_result["vector_ids"],
+            "message": "Project registered successfully and added to vector database"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to register project")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/candidate/{candidate_id}/relevant-projects", summary="Get relevant projects for candidate")
+async def get_relevant_projects_for_candidate(
+    request: Request,
+    candidate_id: str,
+    top_k: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get relevant projects for a candidate based on their profile.
+    
+    Matching logic:
+    - professional_summary + project_portfolio → project_description index
+    - skills_matrix → project_skills index
+    
+    Returns ranked list of project IDs with scores.
+    
+    - **candidate_id**: Unique identifier of the candidate
+    - **top_k**: Number of top projects to return
+    """
+    # Set user in request state for middleware
+    request.state.user = current_user
+    
+    try:
+        # Get candidate document from MongoDB
+        candidate_doc = await db.candidates_collection.find_one({"_id": candidate_id})
+        if not candidate_doc:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        
+        # Get candidate's vector IDs
+        vector_ids = candidate_doc.get("vector_ids", {})
+        if not vector_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Candidate vector IDs not found. Candidate may not be properly vectorized."
+            )
+        
+        # Initialize retrieval pipeline
+        retrieval_pipeline = ProjectRetrievalPipeline()
+        
+        # Get relevant projects
+        results = retrieval_pipeline.get_relevant_projects_for_candidate(
+            candidate_vector_ids=vector_ids,
+            top_k=top_k
+        )
+        
+        # Extract just project IDs from combined ranked results
+        project_ids = [
+            {
+                "project_id": result["project_id"],
+                "overall_score": result["overall_score"],
+                "description_score": result["description_score"],
+                "skills_score": result["skills_score"]
+            }
+            for result in results["combined_ranked"]
+        ]
+        
+        return {
+            "success": True,
+            "candidate_id": candidate_id,
+            "candidate_name": candidate_doc.get("name", "Unknown"),
+            "total_projects_matched": len(project_ids),
+            "projects": project_ids
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to get relevant projects for candidate {candidate_id}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving relevant projects: {str(e)}"
+        )
+
+@app.post("/get-ranked-candidates", summary="Get ranked candidates for project")
+async def get_ranked_candidates(
+    request: Request,
+    project_id: str = Body(..., description="ID of the project to match candidates against"),
+    top_k: int = Body(100, description="Number of top candidates to return"),
+    filters: Dict[str, Any] = Body(
+        default={
+            "has_leadership": None,
+            "highest_education": None, 
+            "seniority_level": None
+        },
+        description="Filters for candidate search (use null for any filter to ignore it)"
+    ),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get ranked candidates based on project ID.
+    Fetches project data from MongoDB and uses project_description and project_skills for matching.
+    Returns top_k ranked candidates.
+    """
+    # Set user in request state for middleware
+    request.state.user = current_user
+    
+    try:
+        # Fetch project from MongoDB
+        project_doc = await db.projects_collection.find_one({"_id": project_id})
+        if not project_doc:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Extract project description and skills
+        project_description = project_doc.get("project_description", "")
+        project_skills_raw = project_doc.get("project_skills", [])
+        
+        # Handle project_skills - can be list or string
+        if isinstance(project_skills_raw, str):
+            # Convert comma-separated string to list
+            required_skills = [skill.strip() for skill in project_skills_raw.split(",") if skill.strip()]
+        elif isinstance(project_skills_raw, list):
+            required_skills = [str(skill).strip() for skill in project_skills_raw if skill]
+        else:
+            required_skills = []
+        
+        if not project_description:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Project description not found in project data"
+            )
+        
+        if not required_skills:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Project skills not found in project data"
+            )
+        
+        # Initialize the retrieval pipeline
+        retrieval_pipeline = CandidateRetrievalPipeline()
+        
+        # Retrieve ranked candidates (this returns all candidates, not just top-k)
+        results = retrieval_pipeline.retrieve_ranked_candidates(
+            project_description=project_description,
+            required_skills=required_skills,
+            filters=filters
+        )
+        
+        # Limit to top_k results
+        combined_results = results["combined_ranked"][:top_k]
+        
+        # Return only the combined ranked results (top_k)
+        return {
+            "success": True,
+            "project_id": project_id,
+            "project_description": project_description,
+            "required_skills": required_skills,
+            "filters_applied": filters,
+            "top_k": top_k,
+            "results_count": {
+                "professional_summary": len(results["professional_summary_ranked"]),
+                "project_portfolio": len(results["project_portfolio_ranked"]),
+                "skills_matrix": len(results["skills_matrix_ranked"]),
+                "combined_total": len(results["combined_ranked"]),
+                "combined_returned": len(combined_results)
+            },
+            "combined_ranked_results": combined_results
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get ranked candidates")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving ranked candidates: {str(e)}"
+        )
+        
 if __name__ == "__main__":
     import uvicorn
     

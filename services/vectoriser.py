@@ -22,19 +22,17 @@ load_dotenv()
 DATASET_DIR = "dataset"
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east-1")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Required for OpenAIEmbeddings
 EMB_MODEL = "text-embedding-3-large"
-
-# Verify required API keys are present
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY environment variable not set. Please set it in your .env file.")
-if not PINECONE_API_KEY:
-    raise ValueError("PINECONE_API_KEY environment variable not set. Please set it in your .env file.")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Pinecone index names
 PROFESSIONAL_INDEX = "professional-summary"
 SKILLS_INDEX = "skills-matrix" 
 PROJECT_INDEX = "project-portfolio"
+
+# Project indexes (for reverse matching)
+PROJECT_DESCRIPTION_INDEX = "project-description"
+PROJECT_SKILLS_INDEX = "project-skills"
 
 # Initialize Pinecone
 pc = Pinecone(api_key=PINECONE_API_KEY)
@@ -67,7 +65,13 @@ class PineconeVectoriser:
 
     def _ensure_indexes_exist(self):
         """Create Pinecone indexes if they don't exist"""
-        index_names = [PROFESSIONAL_INDEX, SKILLS_INDEX, PROJECT_INDEX]
+        index_names = [
+            PROFESSIONAL_INDEX, 
+            SKILLS_INDEX, 
+            PROJECT_INDEX,
+            PROJECT_DESCRIPTION_INDEX,
+            PROJECT_SKILLS_INDEX
+        ]
         
         for index_name in index_names:
             if index_name not in pc.list_indexes().names():
@@ -90,6 +94,15 @@ class PineconeVectoriser:
             "professional_summary": f"prof_{candidate_id}",
             "skills_matrix": f"skills_{candidate_id}",
             "project_portfolio": f"project_{candidate_id}"
+        }
+    
+    def _generate_project_vector_ids(self, project_id: str) -> Dict[str, str]:
+        """
+        Generate consistent vector IDs for project document types
+        """
+        return {
+            "project_description": f"proj_desc_{project_id}",
+            "project_skills": f"proj_skills_{project_id}"
         }
     
     def extract_prioritized_content(self, resume_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -681,6 +694,150 @@ class PineconeVectoriser:
             
         except Exception as e:
             print(f"Error deleting candidate from Pinecone: {e}")
+            return False
+    
+    # ============================================================
+    # PROJECT VECTORIZATION METHODS (for reverse matching)
+    # ============================================================
+    
+    def create_project_documents(self, project_data: Dict[str, Any], project_id: str) -> Dict[str, Any]:
+        """
+        Create 2 document types for a project:
+        1. Project Description - for matching with candidate professional_summary + project_portfolio
+        2. Project Skills - for matching with candidate skills_matrix
+        """
+        project_description = project_data.get("project_description", "")
+        project_skills = project_data.get("project_skills", [])
+        
+        # Normalize and format skills
+        if isinstance(project_skills, list):
+            skills_text = ", ".join([str(skill).strip() for skill in project_skills if skill])
+        elif isinstance(project_skills, str):
+            skills_text = project_skills
+        else:
+            skills_text = ""
+        
+        # Generate vector IDs
+        vector_ids = self._generate_project_vector_ids(project_id)
+        
+        # Create Project Description Document
+        description_content = self._normalize_text(project_description)
+        description_metadata = {
+            "project_id": project_id,
+            "document_type": "project_description",
+            "text": description_content,
+        }
+        description_doc = Document(
+            page_content=description_content,
+            metadata=description_metadata
+        )
+        
+        # Create Project Skills Document
+        skills_content = self._normalize_text(skills_text)
+        skills_metadata = {
+            "project_id": project_id,
+            "document_type": "project_skills",
+            "text": skills_content,
+            "skills_list": project_skills if isinstance(project_skills, list) else []
+        }
+        skills_doc = Document(
+            page_content=skills_content,
+            metadata=skills_metadata
+        )
+        
+        return {
+            "documents": {
+                "project_description": description_doc,
+                "project_skills": skills_doc
+            },
+            "vector_ids": vector_ids
+        }
+    
+    def add_project(self, project_data: Dict[str, Any], project_id: str) -> Dict[str, Any]:
+        """
+        Add a project to Pinecone indexes (project_description and project_skills)
+        """
+        try:
+            # Create project documents
+            result = self.create_project_documents(project_data, project_id)
+            documents = result["documents"]
+            vector_ids = result["vector_ids"]
+            
+            # Add to project description index
+            description_store = PineconeVectorStore.from_documents(
+                documents=[documents["project_description"]],
+                embedding=self.embeddings,
+                index_name=PROJECT_DESCRIPTION_INDEX,
+                ids=[vector_ids["project_description"]]
+            )
+            
+            # Add to project skills index
+            skills_store = PineconeVectorStore.from_documents(
+                documents=[documents["project_skills"]],
+                embedding=self.embeddings,
+                index_name=PROJECT_SKILLS_INDEX,
+                ids=[vector_ids["project_skills"]]
+            )
+            
+            print(f"Successfully added project '{project_id}' to Pinecone indexes")
+            print(f"Vector IDs: {vector_ids}")
+            
+            return {
+                "success": True,
+                "project_id": project_id,
+                "metadata": {
+                    "project_description": project_data.get("project_description", ""),
+                    "project_skills": project_data.get("project_skills", [])
+                },
+                "vector_ids": vector_ids
+            }
+            
+        except Exception as e:
+            print(f"Error adding project to Pinecone: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def update_project(self, project_data: Dict[str, Any], project_id: str) -> Dict[str, Any]:
+        """
+        Update a project in Pinecone indexes
+        """
+        try:
+            # First delete existing vectors
+            self.delete_project(project_id)
+            
+            # Then add updated vectors
+            return self.add_project(project_data, project_id)
+            
+        except Exception as e:
+            print(f"Error updating project in Pinecone: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def delete_project(self, project_id: str) -> bool:
+        """
+        Delete all vectors for a project from all indexes using known vector IDs
+        """
+        try:
+            vector_ids = self._generate_project_vector_ids(project_id)
+            
+            # Delete from project description index
+            description_index = pc.Index(PROJECT_DESCRIPTION_INDEX)
+            description_index.delete(ids=[vector_ids["project_description"]])
+            
+            # Delete from project skills index
+            skills_index = pc.Index(PROJECT_SKILLS_INDEX)
+            skills_index.delete(ids=[vector_ids["project_skills"]])
+            
+            print(f"Successfully deleted project '{project_id}' from Pinecone indexes")
+            print(f"Deleted vector IDs: {list(vector_ids.values())}")
+            return True
+            
+        except Exception as e:
+            print(f"Error deleting project from Pinecone: {e}")
             return False
 
 # Global instance
