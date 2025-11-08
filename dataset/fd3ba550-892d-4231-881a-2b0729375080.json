@@ -1,0 +1,116 @@
+{
+  "name": "Ashwini Thikole",
+  "phone": "9359395693",
+  "mail": "envel⌢peashwinithikole@gmail.com",
+  "social": {
+    "github": "github.com/ashu-2004",
+    "linkedin": "linkedin.com/in/ashwini-thikole-27a50b291",
+    "portfolio": ""
+  },
+  "education": [
+    {
+      "name": "Government College Of Engineering And Research Avasari Khurd",
+      "qualification": "Bachelor of Engineering in Computer Engineering",
+      "category": "Undergraduate",
+      "start": "Sep. 2023",
+      "end": "May 2026"
+    },
+    {
+      "name": "Abhinav Education Society’s College Of Engineering (Polytechnic)",
+      "qualification": "Diploma in Computer Engineering",
+      "category": "Diploma / Vocational Education",
+      "start": "Sep. 2020",
+      "end": "May 2023"
+    },
+    {
+      "name": "Yashwant Vidyalaya Mavadi K.P. Branch High School Pandeshwar",
+      "qualification": "SSC",
+      "category": "Secondary Education",
+      "start": "Jun. 2019",
+      "end": "Mar. 2020"
+    }
+  ],
+  "skills": [
+    "React.js",
+    "Node.js",
+    "Express.js",
+    "HTML/CSS",
+    "JavaScript",
+    "Java",
+    "C",
+    "PHP",
+    "Python",
+    "Bootstrap",
+    "MySQL",
+    "MongoDB",
+    "SQL",
+    "VS Code",
+    "GitHub",
+    "Dev-C++"
+  ],
+  "projects": [
+    {
+      "title": "SheLaunch",
+      "description": "Built an end-to-end platform with dedicated modules for Admin, Entrepreneur, Mentor, and Investor, connecting over 500+ users for real-time collaboration and funding opportunities.",
+      "project_skills": [
+        "MERN Stack",
+        "WebSocket",
+        "Gen AI",
+        "LLM"
+      ]
+    },
+    {
+      "title": "Freelancing Project – Valine Agro",
+      "description": "Constructed a multi-level e-commerce platform for Valine Agro with modules for Admin, CCM, DM, and AM, supporting 50+ hierarchical user roles and automated product management for 100+ listed items.",
+      "project_skills": [
+        "MERN"
+      ]
+    }
+  ],
+  "experience": [
+    {
+      "company_name": "DD Digital Solution Pvt. Ltd.",
+      "designation": "Junior React Developer (Intern)",
+      "description": "Led a 2-member developer team under the guidance of a mentor to deliver the Mauli Dairy System, covering modules for Superadmin, Admin, Delivery Boys, Farmers, and End Users. Designed and implemented 80% of frontend components using React.js, and integrated 60+ RESTful APIs for real-time data operations. Focused on code optimization, bug fixing, and seamless API integration to enhance application performance and user experience.",
+      "experiance_skills": [
+        "React.js",
+        "API Integration",
+        "Frontend Development"
+      ],
+      "start": "Feb 2025",
+      "end": "May 2025"
+    },
+    {
+      "company_name": "Open Interface Software Solution Pvt. Ltd.",
+      "designation": "SDE (Intern)",
+      "description": "Developed features to manage booking approvals, car inventory, brands, images, and detailed vehicle data, contributing to around 70% of the admin panel’s functionality. Executed booking functionality allowing users to reserve one or multiple cars and select custom date slots, with admin-controlled confirmation and integrated Razorpay for secure online payments.",
+      "experiance_skills": [
+        "Booking Management",
+        "Admin Panel Development",
+        "Razorpay Integration"
+      ],
+      "start": "July 2022",
+      "end": "August 2022"
+    }
+  ],
+  "certifications": [],
+  "achievements": [
+    "Member of Hackathon Club",
+    "Treasurer SPPU"
+  ],
+  "total_experience_years": 0.33,
+  "_id": "fd3ba550-892d-4231-881a-2b0729375080",
+  "created_at": "2025-11-08T12:23:20.262699Z",
+  "vector_ids": {
+    "professional_summary": "prof_fd3ba550-892d-4231-881a-2b0729375080",
+    "skills_matrix": "skills_fd3ba550-892d-4231-881a-2b0729375080",
+    "project_portfolio": "project_fd3ba550-892d-4231-881a-2b0729375080"
+  },
+  "pinecone_metadata": {
+    "candidate_id": "fd3ba550-892d-4231-881a-2b0729375080",
+    "name": "Ashwini Thikole",
+    "seniority_level": "junior",
+    "highest_education": "BE",
+    "has_leadership": true
+  }
+}

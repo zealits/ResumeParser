@@ -6,8 +6,9 @@ import tempfile
 import json
 import time
 import logging
+import re
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List
 from dotenv import load_dotenv
@@ -27,7 +28,7 @@ from middleware import (
     RequestLoggingMiddleware, FileSizeLimitMiddleware, CORSHeadersMiddleware
 )
 from config import settings
-from models import SubscriptionTier, SUBSCRIPTION_LIMITS
+from models import SubscriptionTier, SUBSCRIPTION_LIMITS, ProjectRegisterRequest, ProjectUpdateRequest, ProjectResponse
 
 # Load environment variables from .env file
 load_dotenv()
@@ -105,6 +106,7 @@ app.add_middleware(UsageTrackingMiddleware, track_endpoints=[
     "/register-json",
     "/get-ranked-candidates",
     "/register-project",
+    "/project/{project_id}",
     "/candidate/{candidate_id}/relevant-projects"
 ])
 app.add_middleware(CORSHeadersMiddleware, allowed_origins=settings.ALLOWED_ORIGINS)
@@ -722,25 +724,28 @@ async def evaluate_candidate_test(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/register-project", status_code=201, summary="Register project")
+@app.post("/register-project", status_code=201, summary="Register project", response_model=ProjectResponse)
 async def register_project(
     request: Request,
-    payload: Dict[str, Any] = Body(...),
+    payload: ProjectRegisterRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """
     Register a project with project_description and project_skills.
     Stores in MongoDB and creates 2 vectors in Pinecone (project_description and project_skills).
-    
-    - **payload**: Project data with project_description and project_skills
     """
     # Set user in request state for middleware
     request.state.user = current_user
     
     try:
+        # Convert Pydantic model to dict
+        payload_dict = payload.model_dump(exclude_none=True)
+        
         # Validate required fields
-        project_description = payload.get("project_description", "")
-        project_skills = payload.get("project_skills", [])
+        project_description = payload_dict.get("project_description", "")
+        project_skills = payload_dict.get("project_skills", [])
+        project_heading = payload_dict.get("project_heading")  # Optional, MongoDB only
+        application_deadline = payload_dict.get("application_deadline")
         
         if not project_description:
             raise HTTPException(
@@ -754,9 +759,35 @@ async def register_project(
                 detail="project_skills is required (list or string)"
             )
         
+        # Validate application_deadline if provided
+        if application_deadline:
+            try:
+                # Parse to ensure it's a valid ISO format datetime
+                deadline_str = str(application_deadline).strip()
+                # Normalize: replace Z with +00:00 for parsing
+                if deadline_str.endswith('Z'):
+                    deadline_str = deadline_str.replace('Z', '+00:00')
+                deadline_dt = datetime.fromisoformat(deadline_str)
+                
+                # Ensure timezone-aware (assume UTC if naive)
+                if deadline_dt.tzinfo is None:
+                    deadline_dt = deadline_dt.replace(tzinfo=timezone.utc)
+                else:
+                    # Convert to UTC if not already
+                    deadline_dt = deadline_dt.astimezone(timezone.utc)
+                
+                # Store as ISO format string in UTC with Z suffix (not +00:00Z)
+                # Format: YYYY-MM-DDTHH:MM:SSZ
+                payload_dict["application_deadline"] = deadline_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            except (ValueError, AttributeError) as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"application_deadline must be in ISO format (e.g., '2024-12-31T23:59:59Z'). Error: {str(e)}"
+                )
+        
         # Generate project ID
         project_id = str(uuid4())
-        payload_copy = dict(payload)
+        payload_copy = dict(payload_dict)
         
         # Add to Pinecone FIRST to get vector IDs
         pinecone_result = pinecone_vectoriser.add_project(payload_copy, project_id)
@@ -793,6 +824,194 @@ async def register_project(
         logger.exception("Failed to register project")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.put("/project/{project_id}", summary="Update project", response_model=ProjectResponse)
+async def update_project(
+    request: Request,
+    project_id: str,
+    payload: ProjectUpdateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update project JSON and update Pinecone.
+    All fields are optional - only provided fields will be updated.
+    """
+    # Set user in request state for middleware
+    request.state.user = current_user
+    
+    try:
+        # Check if project exists
+        existing_doc = await db.projects_collection.find_one({"_id": project_id})
+        if not existing_doc:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Convert Pydantic model to dict, excluding None values
+        payload_dict = payload.model_dump(exclude_none=True)
+        
+        # Merge with existing document - use provided values or keep existing ones
+        project_description = payload_dict.get("project_description", existing_doc.get("project_description", ""))
+        project_skills = payload_dict.get("project_skills", existing_doc.get("project_skills", []))
+        
+        if not project_description:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="project_description is required"
+            )
+        
+        if not project_skills:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="project_skills is required (list or string)"
+            )
+
+        # Validate application_deadline if provided
+        application_deadline = payload_dict.get("application_deadline")
+        if application_deadline:
+            try:
+                # Parse to ensure it's a valid ISO format datetime
+                deadline_str = str(application_deadline).strip()
+                # Normalize: replace Z with +00:00 for parsing
+                if deadline_str.endswith('Z'):
+                    deadline_str = deadline_str.replace('Z', '+00:00')
+                deadline_dt = datetime.fromisoformat(deadline_str)
+                
+                # Ensure timezone-aware (assume UTC if naive)
+                if deadline_dt.tzinfo is None:
+                    deadline_dt = deadline_dt.replace(tzinfo=timezone.utc)
+                else:
+                    # Convert to UTC if not already
+                    deadline_dt = deadline_dt.astimezone(timezone.utc)
+                
+                # Store as ISO format string in UTC with Z suffix (not +00:00Z)
+                # Format: YYYY-MM-DDTHH:MM:SSZ
+                payload_dict["application_deadline"] = deadline_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            except (ValueError, AttributeError) as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"application_deadline must be in ISO format (e.g., '2024-12-31T23:59:59Z'). Error: {str(e)}"
+                )
+
+        # Merge payload_dict with existing document for complete update
+        # Only update fields that were provided, keep others from existing_doc
+        update_data = {**existing_doc, **payload_dict}
+        # Ensure required fields are present
+        update_data["project_description"] = project_description
+        update_data["project_skills"] = project_skills
+
+        # Update in Pinecone (only send project_description and project_skills)
+        pinecone_payload = {
+            "project_description": project_description,
+            "project_skills": project_skills
+        }
+        pinecone_result = pinecone_vectoriser.update_project(pinecone_payload, project_id)
+        
+        if not pinecone_result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to update project in Pinecone: {pinecone_result.get('error', 'Unknown error')}"
+            )
+
+        # Update MongoDB document
+        payload_copy = dict(update_data)
+        payload_copy["_id"] = project_id
+        payload_copy["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        payload_copy["vector_ids"] = pinecone_result["vector_ids"]  # Update vector IDs
+        payload_copy["pinecone_metadata"] = pinecone_result["metadata"]  # Update metadata
+        # Preserve created_at if it exists
+        if "created_at" in existing_doc:
+            payload_copy["created_at"] = existing_doc["created_at"]
+
+        await db.projects_collection.replace_one({"_id": project_id}, payload_copy, upsert=True)
+
+        logger.info(f"Successfully updated project: {project_id}")
+        logger.info(f"Updated vector IDs: {pinecone_result['vector_ids']}")
+
+        return {
+            "success": True, 
+            "project_id": project_id,
+            "vector_ids": pinecone_result["vector_ids"],
+            "message": "Project updated successfully in vector database"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to update project")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/project/{project_id}", summary="Get project by ID", response_model=ProjectResponse)
+async def get_project(
+    request: Request,
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Retrieve project information by project ID.
+    
+    - **project_id**: Unique identifier of the project
+    """
+    # Set user in request state for middleware
+    request.state.user = current_user
+    
+    doc = await db.projects_collection.find_one({"_id": project_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Convert ObjectId to string for JSON serialization if present
+    if "_id" in doc:
+        doc["_id"] = str(doc["_id"])
+    
+    return {
+        "success": True, 
+        "project": doc,
+        "vector_ids": doc.get("vector_ids", {})
+    }
+
+@app.delete("/project/{project_id}", summary="Delete project")
+async def delete_project(
+    request: Request,
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Delete project and remove from Pinecone.
+    
+    - **project_id**: Unique identifier of the project
+    """
+    # Set user in request state for middleware
+    request.state.user = current_user
+    
+    try:
+        # Get project first to log vector IDs
+        project = await db.projects_collection.find_one({"_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Delete from MongoDB
+        result = await db.projects_collection.delete_one({"_id": project_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Delete from Pinecone using stored vector IDs
+        vector_ids = project.get("vector_ids", {})
+        logger.info(f"Deleting project {project_id} with vector IDs: {vector_ids}")
+        
+        success = pinecone_vectoriser.delete_project(project_id)
+        
+        if not success:
+            logger.warning(f"Failed to delete project {project_id} from Pinecone")
+
+        return {
+            "success": True, 
+            "message": "Project deleted successfully",
+            "deleted_vector_ids": vector_ids
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to delete project")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/candidate/{candidate_id}/relevant-projects", summary="Get relevant projects for candidate")
 async def get_relevant_projects_for_candidate(
     request: Request,
@@ -807,7 +1026,7 @@ async def get_relevant_projects_for_candidate(
     - professional_summary + project_portfolio → project_description index
     - skills_matrix → project_skills index
     
-    Returns ranked list of project IDs with scores.
+    Returns ranked list of project IDs with scores. Filters out projects with past application deadlines.
     
     - **candidate_id**: Unique identifier of the candidate
     - **top_k**: Number of top projects to return
@@ -838,8 +1057,8 @@ async def get_relevant_projects_for_candidate(
             top_k=top_k
         )
         
-        # Extract just project IDs from combined ranked results
-        project_ids = [
+        # Extract project IDs from combined ranked results
+        project_results = [
             {
                 "project_id": result["project_id"],
                 "overall_score": result["overall_score"],
@@ -849,12 +1068,69 @@ async def get_relevant_projects_for_candidate(
             for result in results["combined_ranked"]
         ]
         
+        # Filter out projects with past deadlines
+        current_time = datetime.now(timezone.utc)  # Use timezone-aware UTC datetime
+        valid_projects = []
+        
+        for project_result in project_results:
+            project_id = project_result["project_id"]
+            
+            # Fetch project document from MongoDB to check deadline
+            project_doc = await db.projects_collection.find_one({"_id": project_id})
+            
+            if not project_doc:
+                # Project doesn't exist in MongoDB, skip it
+                continue
+            
+            # Check application_deadline
+            application_deadline = project_doc.get("application_deadline")
+            
+            if application_deadline:
+                try:
+                    # Normalize deadline string - handle various formats
+                    deadline_str = str(application_deadline).strip()
+                    
+                    # Handle malformed formats like "2024-12-31T23:59:59+00:00Z"
+                    # Remove trailing 'Z' if there's already timezone offset (+XX:XX or -XX:XX)
+                    if deadline_str.endswith('Z'):
+                        # Check if there's a timezone offset pattern before the Z
+                        # Pattern: ends with +HH:MMZ or -HH:MMZ
+                        if re.search(r'[+-]\d{2}:\d{2}Z?$', deadline_str):
+                            # Has timezone offset, just remove trailing Z
+                            deadline_str = deadline_str.rstrip('Z')
+                        else:
+                            # No timezone offset, replace Z with +00:00
+                            deadline_str = deadline_str.replace('Z', '+00:00')
+                    
+                    # Parse the deadline
+                    deadline_dt = datetime.fromisoformat(deadline_str)
+                    
+                    # Ensure deadline is timezone-aware (if naive, assume UTC)
+                    if deadline_dt.tzinfo is None:
+                        deadline_dt = deadline_dt.replace(tzinfo=timezone.utc)
+                    
+                    # Only include if deadline is in the future (strictly greater than current time)
+                    if deadline_dt > current_time:
+                        valid_projects.append(project_result)
+                    # If deadline is in the past or equal to current time, skip this project
+                    else:
+                        logger.info(f"Skipping project {project_id} - deadline {application_deadline} ({deadline_dt.isoformat()}) is in the past (current: {current_time.isoformat()})")
+                except (ValueError, AttributeError) as e:
+                    # If deadline format is invalid, log error and EXCLUDE the project
+                    # We can't verify if it's valid, so err on the side of caution
+                    logger.error(f"Invalid deadline format for project {project_id}: {application_deadline}. Error: {str(e)}. Excluding project.")
+                    # Do NOT add to valid_projects - exclude it
+            else:
+                # No deadline specified, include the project
+                valid_projects.append(project_result)
+        
         return {
             "success": True,
             "candidate_id": candidate_id,
             "candidate_name": candidate_doc.get("name", "Unknown"),
-            "total_projects_matched": len(project_ids),
-            "projects": project_ids
+            "total_projects_matched": len(project_results),
+            "total_valid_projects": len(valid_projects),
+            "projects": valid_projects
         }
         
     except HTTPException:

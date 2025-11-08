@@ -209,4 +209,60 @@ SUBSCRIPTION_LIMITS = {
     }
 }
 
+# Project Models
+class ProjectRegisterRequest(BaseModel):
+    """Schema for registering a new project"""
+    project_description: str = Field(..., description="Description of the project", min_length=1)
+    project_skills: List[str] = Field(..., description="List of required skills for the project", min_items=1)
+    project_heading: Optional[str] = Field(None, description="Short heading/title for the project (stored in MongoDB only, not in Pinecone)")
+    application_deadline: Optional[str] = Field(None, description="Application deadline in ISO format (e.g., '2024-12-31T23:59:59Z')")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "project_heading": "Full-Stack Developer Position",
+                "project_description": "We are looking for a full-stack developer to build a modern web application using React and Node.js. The project involves creating a real-time collaboration platform with features like live editing, chat, and file sharing.",
+                "project_skills": ["React", "Node.js", "MongoDB", "WebSocket", "TypeScript", "Express"],
+                "application_deadline": "2025-12-31T23:59:59Z"
+            }
+        }
+
+class ProjectUpdateRequest(BaseModel):
+    """Schema for updating an existing project"""
+    project_description: Optional[str] = Field(None, description="Description of the project", min_length=1)
+    project_skills: Optional[List[str]] = Field(None, description="List of required skills for the project", min_items=1)
+    project_heading: Optional[str] = Field(None, description="Short heading/title for the project (stored in MongoDB only, not in Pinecone)")
+    application_deadline: Optional[str] = Field(None, description="Application deadline in ISO format (e.g., '2024-12-31T23:59:59Z')")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "project_heading": "Updated Full-Stack Developer Position",
+                "project_description": "Updated description for the project",
+                "project_skills": ["React", "Node.js", "TypeScript"],
+                "application_deadline": "2025-12-31T23:59:59Z"
+            }
+        }
+
+class ProjectResponse(BaseModel):
+    """Schema for project response"""
+    success: bool
+    project_id: Optional[str] = None
+    vector_ids: Optional[Dict[str, str]] = None
+    message: Optional[str] = None
+    project: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "project_id": "c33b3d28-9508-42b8-b869-5076c94e121e",
+                "vector_ids": {
+                    "project_description": "proj_desc_c33b3d28-9508-42b8-b869-5076c94e121e",
+                    "project_skills": "proj_skills_c33b3d28-9508-42b8-b869-5076c94e121e"
+                },
+                "message": "Project registered successfully and added to vector database"
+            }
+        }
+
 

@@ -1,0 +1,139 @@
+{
+  "name": "SIDDHARTH BASALE",
+  "phone": "+91-9284307086",
+  "mail": "siddharthbasale2004@gmail.com",
+  "social": {
+    "github": "github.com/Siddharth -Basale",
+    "linkedin": "www.linkedin.com/in/siddharth -basale -16350b291",
+    "portfolio": ""
+  },
+  "education": [
+    {
+      "name": "Government College of Engineering & Research, Avasari Khurd, Pune",
+      "qualification": "BE Computer Engineering",
+      "category": "Undergraduate",
+      "start": "2022",
+      "end": "2026"
+    },
+    {
+      "name": "Laxmanrao Apte Junior College Deccan Gymkhana, Pune",
+      "qualification": "HSC (Class XII)",
+      "category": "Higher Secondary",
+      "start": "2020",
+      "end": "2022"
+    },
+    {
+      "name": "Sinhgad Spring Dale School , Vadgaon, Pune",
+      "qualification": "CBSE (Class X)",
+      "category": "Secondary Education",
+      "start": "2014",
+      "end": "2020"
+    }
+  ],
+  "skills": [
+    "Python",
+    "Machine Learning",
+    "Agentic AI",
+    "NLP",
+    "Open CV",
+    "Tensorflow",
+    "Pytorch",
+    "Java",
+    "Django",
+    "Blockchain",
+    "MySQL",
+    "Git"
+  ],
+  "projects": [
+    {
+      "title": "Smart Supply Chain Management Platform with Blockchain Integration",
+      "description": "Developed a smart contract escrow system for secure B2B payments, integrating MetaMask for Ethereum transactions and penalty enforcement. Created a bidirectional marketplace for manufacturers and suppliers, with real-time negotiations and supplier ratings. Integrated AI for supplier recommendations and market demand analysis, alongside live commodity price tracking. Built and hard-coded AI agents for decision-making and automation across supply chain tasks. Developed an intelligent logistics system with route optimization, lead time calculation, and vehicle selection.",
+      "project_skills": [
+        "Django",
+        "Ethereum",
+        "Smart Contracts",
+        "Google Gemini AI",
+        "Phidata",
+        "SQLite",
+        "Geopy",
+        "Tailwind CSS",
+        "Web3.js"
+      ]
+    },
+    {
+      "title": "Chess Vision AI – Real-Time Chessboard Analysis Tool",
+      "description": "Developed a real-time chess analysis system where users can snap a photo of any chessboard (2D or 3D) and instantly receive the optimal next move. Built a custom chess dataset from scratch, achieving 94% detection accuracy on real-world board configurations. Employed YOLOv8 for both object detection and segmentation of chess pieces and boards. Designed a perspective-aware mapping algorithm to translate board positions from both white and black views. Improvised AI to convert visual inputs into FEN notation, enabling seamless move prediction using Stockfish.",
+      "project_skills": [
+        "Pytorch",
+        "YOLOv8",
+        "OpenCV",
+        "Streamlit",
+        "Stockfish",
+        "HuggingFace"
+      ]
+    },
+    {
+      "title": "InsightAI – AI-Powered Interview Management System",
+      "description": "Built a full-stack platform for automated interview scheduling, real-time candidate analysis, and intelligent evaluation. Leveraged Groq LLM API for contextual interview question generation and domain-based difficulty categorization. Implemented PDF parsing for resume analysis and Zoom API with OAuth2 for seamless scheduling and email automation. Developed real-time video analytics using OpenCV and MediaPipe for gaze tracking, and DeepFace for emotion detection. Built AI agents to evaluate responses, emotions, and engagement using heatmaps and structured reporting.",
+      "project_skills": [
+        "Django",
+        "Groq LLM API",
+        "OpenCV",
+        "MediaPipe",
+        "DeepFace",
+        "Zoom API",
+        "OAuth2",
+        "PDF parsing",
+        "Django ORM"
+      ]
+    }
+  ],
+  "experience": [
+    {
+      "company_name": "Aiiventure, Wyoming, USA",
+      "designation": "AI Intern",
+      "description": "Working on Agentic AI-driven solutions involving autonomous agents for enterprise applications. Built modular AI workflows using LangGraph, integrating complex reasoning paths for scalable agent coordination. Developed robust backend services with Django, ensuring secure and efficient data handling across components. Applied OpenCV for Computer Vision tasks including image preprocessing, object detection, and visual analysis.",
+      "experiance_skills": [
+        "Agentic AI",
+        "LangGraph",
+        "Django",
+        "OpenCV"
+      ],
+      "start": "Dec'24",
+      "end": "Present"
+    },
+    {
+      "company_name": "MNNLR, Hyderabad",
+      "designation": "Machine Learning Intern",
+      "description": "Implemented AI-driven computer vision solutions for real-time object recognition and strategic decision-making systems. Built and fine-tuned deep learning models using TensorFlow & Pytorch. Leveraged YOLOv8 for object detection and segmentation. Deployed interactive user interfaces using Streamlit.",
+      "experiance_skills": [
+        "TensorFlow",
+        "Pytorch",
+        "YOLOv8",
+        "Streamlit"
+      ],
+      "start": "Aug'24",
+      "end": "Dec'24"
+    }
+  ],
+  "certifications": [],
+  "achievements": [
+    "1st Place – HackToFuture 3.0, National Hackathon | Linkedin Apr'25",
+    "2nd Place – QUASAR 3.0, National Hackathon | Linkedin May'25"
+  ],
+  "total_experience_years": 1.27,
+  "_id": "ae1e4477-0ebb-4d88-aa6a-035868a076e3",
+  "created_at": "2025-11-07T11:05:04.395640Z",
+  "vector_ids": {
+    "professional_summary": "prof_ae1e4477-0ebb-4d88-aa6a-035868a076e3",
+    "skills_matrix": "skills_ae1e4477-0ebb-4d88-aa6a-035868a076e3",
+    "project_portfolio": "project_ae1e4477-0ebb-4d88-aa6a-035868a076e3"
+  },
+  "pinecone_metadata": {
+    "candidate_id": "ae1e4477-0ebb-4d88-aa6a-035868a076e3",
+    "name": "SIDDHARTH BASALE",
+    "seniority_level": "junior",
+    "highest_education": "BE",
+    "has_leadership": false
+  }
+}
