@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Request, Body, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
@@ -18,6 +19,7 @@ from services.retrival import CandidateRetrievalPipeline
 from services.project_retrieval import ProjectRetrievalPipeline
 from services.testgen import generate_test
 from services.evaluate import evaluate_test
+from services.github_analyzer import analyze_github_profile, GitHubProfileError
 
 # Import authentication and database modules
 from auth import get_current_user, auth_manager
@@ -28,7 +30,15 @@ from middleware import (
     RequestLoggingMiddleware, FileSizeLimitMiddleware, CORSHeadersMiddleware
 )
 from config import settings
-from models import SubscriptionTier, SUBSCRIPTION_LIMITS, ProjectRegisterRequest, ProjectUpdateRequest, ProjectResponse
+from models import (
+    SubscriptionTier,
+    SUBSCRIPTION_LIMITS,
+    ProjectRegisterRequest,
+    ProjectUpdateRequest,
+    ProjectResponse,
+    GitHubProfileRequest,
+    GitHubProfileResponse,
+)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -107,7 +117,8 @@ app.add_middleware(UsageTrackingMiddleware, track_endpoints=[
     "/get-ranked-candidates",
     "/register-project",
     "/project/{project_id}",
-    "/candidate/{candidate_id}/relevant-projects"
+    "/candidate/{candidate_id}/relevant-projects",
+    "/analyze-github-profile"
 ])
 app.add_middleware(CORSHeadersMiddleware, allowed_origins=settings.ALLOWED_ORIGINS)
 
@@ -328,6 +339,66 @@ async def parse_resume_text(
             status_code=500, 
             detail=f"Error processing resume text: {str(e)}"
         )
+
+
+# ------------------------------------------------------------
+# GitHub Profile Analysis
+# ------------------------------------------------------------
+@app.post(
+    "/analyze-github-profile",
+    summary="Analyze GitHub profile",
+    response_model=GitHubProfileResponse
+)
+async def analyze_github_profile_endpoint(
+    request: Request,
+    payload: GitHubProfileRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Analyze a GitHub profile by fetching user details and top repositories.
+
+    - **profile_url**: GitHub profile URL to analyze
+    - **repo_count**: Total repositories (sorted by stars) to include in the analysis
+    - **github_token**: Optional GitHub personal access token (overrides environment value)
+    """
+    request.state.user = current_user
+
+    profile_url = str(payload.profile_url)
+    token = payload.github_token or os.getenv("GITHUB_ACCESS_TOKEN")
+
+    try:
+        full_report = await run_in_threadpool(
+            analyze_github_profile,
+            profile_url,
+            payload.repo_count,
+            token,
+        )
+    except GitHubProfileError as exc:
+        logger.warning(
+            "GitHub profile analysis failed for %s: %s",
+            profile_url,
+            exc.message
+        )
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+    except Exception:
+        logger.exception(
+            "Unexpected error while analyzing GitHub profile for %s",
+            profile_url
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to analyze GitHub profile"
+        )
+
+    filtered_report = {
+        "profile_info": full_report.get("profile_info"),
+        "repositories_summary": full_report.get("repositories_summary"),
+    }
+
+    return {
+        "success": True,
+        "report": filtered_report,
+    }
 
 # ------------------------------------------------------------
 # Candidate Management Endpoints 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, HttpUrl
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from enum import Enum
@@ -265,4 +265,73 @@ class ProjectResponse(BaseModel):
             }
         }
 
+
+class GitHubProfileRequest(BaseModel):
+    """Schema for GitHub profile analysis request"""
+    profile_url: HttpUrl = Field(..., description="Public GitHub profile URL to analyze")
+    repo_count: int = Field(
+        10,
+        ge=1,
+        le=50,
+        description="Number of top repositories (sorted by stars) to include in the analysis",
+    )
+    github_token: Optional[str] = Field(
+        None,
+        description="Optional GitHub personal access token. Falls back to GITHUB_ACCESS_TOKEN env var if omitted.",
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "profile_url": "https://github.com/aniket-017",
+                "repo_count": 5,
+            }
+        }
+
+
+class GitHubProfileResponse(BaseModel):
+    """Schema for GitHub profile analysis response"""
+    success: bool
+    report: Dict[str, Any]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "report": {
+                    "profile_info": {
+                        "username": "Siddharth-Basale",
+                        "name": "Siddharth Basale",
+                        "bio": None,
+                        "company": None,
+                        "location": None,
+                        "email": "siddharthbasale2004@gmail.com",
+                        "blog": "",
+                        "twitter_username": None,
+                        "avatar_url": "https://avatars.githubusercontent.com/u/132909051?v=4",
+                        "profile_url": "https://github.com/Siddharth-Basale",
+                        "followers": 11,
+                        "following": 14,
+                        "public_repos": 46,
+                        "public_gists": 0,
+                        "created_at": "2023-05-08T12:23:15Z",
+                        "updated_at": "2025-11-08T10:06:54Z"
+                    },
+                    "repositories_summary": {
+                        "total_repositories_analyzed": 5,
+                        "total_user_repositories": 46,
+                        "total_stars_analyzed": 0,
+                        "total_forks_analyzed": 0,
+                        "language_overview": {
+                            "Python": 81.24,
+                            "JavaScript": 14.39,
+                            "CSS": 3.03,
+                            "HTML": 1.33
+                        },
+                        "primary_language": "Python",
+                        "note": "Analysis based on top 5 repositories sorted by stars."
+                    }
+                }
+            }
+        }
 
