@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — Resume Parser API</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<div class="app-bar">
+  <div class="app-bar-inner">
+    <a class="brand" href="/"><span class="brand-mark">◈</span> Resume Parser</a>
+    <div style="margin-left:auto;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <span class="credit-chip" id="chip">
+        <span class="muted">Credits</span> <b id="chip-bal">—</b>
+      </span>
+      <a class="btn btn-ghost btn-sm" href="/docs">API docs</a>
+      <button class="btn btn-quiet btn-sm" id="logout">Log out</button>
+    </div>
+  </div>
+</div>
+
+<main class="app-main">
+  <div id="msg" class="hide"></div>
+
+  <div class="page-head">
+    <div>
+      <h1 id="hello">Dashboard</h1>
+      <p class="muted" id="sub">Loading your account…</p>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-primary" id="topup-btn">Top up credits</button>
+  </div>
+
+  <!-- metrics -->
+  <div class="grid grid-4" style="margin-bottom:30px">
+    <div class="metric accent">
+      <div class="k">Credits remaining</div>
+      <div class="v" id="m-balance">—</div>
+      <div class="meter" id="m-meter"><i style="width:0%"></i></div>
+      <div class="sub" id="m-balance-sub">—</div>
+    </div>
+    <div class="metric">
+      <div class="k">Credits spent</div>
+      <div class="v" id="m-used">—</div>
+      <div class="sub">Across all endpoints</div>
+    </div>
+    <div class="metric">
+      <div class="k">Current plan</div>
+      <div class="v" id="m-plan" style="font-size:1.5rem">—</div>
+      <div class="sub" id="m-tier">—</div>
+    </div>
+    <div class="metric ok">
+      <div class="k">Calls (30 days)</div>
+      <div class="v" id="m-calls">—</div>
+      <div class="sub" id="m-success">—</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="usage">Usage</button>
+    <button class="tab" data-tab="ledger">Credit ledger</button>
+    <button class="tab" data-tab="costs">What calls cost</button>
+    <button class="tab" data-tab="token">API access</button>
+  </div>
+
+  <!-- ------------------------------------------------------------ usage -->
+  <section data-panel="usage">
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>Last 30 days</h3>
+        <div class="table-wrap" style="margin-top:14px">
+          <table>
+            <thead>
+              <tr><th>Day</th><th class="num">Calls</th><th class="num">Avg time</th></tr>
+            </thead>
+            <tbody id="usage-body">
+              <tr><td colspan="3" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Account</h3>
+        <div class="table-wrap" style="margin-top:14px">
+          <table>
+            <tbody id="account-body">
+              <tr><td colspan="2" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- ledger -->
+  <section data-panel="ledger" hidden>
+    <div class="card">
+      <h3>Every credit in and out</h3>
+      <p class="muted" style="font-size:.88rem">
+        Purchases, per-call debits, automatic refunds for failed calls, and
+        admin grants.
+      </p>
+      <div class="table-wrap" style="margin-top:14px">
+        <table>
+          <thead>
+            <tr>
+              <th>When</th><th>Type</th><th>Detail</th>
+              <th class="num">Credits</th><th class="num">Balance</th>
+            </tr>
+          </thead>
+          <tbody id="ledger-body">
+            <tr><td colspan="5" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ costs -->
+  <section data-panel="costs" hidden>
+    <div class="card" style="max-width:640px">
+      <h3>Credit cost per call</h3>
+      <p class="muted" style="font-size:.88rem">
+        Deducted before the call runs; refunded automatically if it fails.
+      </p>
+      <div class="table-wrap" style="margin-top:14px">
+        <table>
+          <thead>
+            <tr><th>Operation</th><th class="num">Credits</th><th class="num">You can afford</th></tr>
+          </thead>
+          <tbody id="costs-body">
+            <tr><td colspan="3" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ token -->
+  <section data-panel="token" hidden>
+    <div class="card" style="max-width:760px">
+      <h3>Calling the API</h3>
+      <p class="muted" style="font-size:.9rem">
+        Send your JWT as a bearer token. This one is tied to this browser
+        session and expires — get a fresh one from
+        <code>POST /auth/login</code> in your own code.
+      </p>
+      <div class="field">
+        <label>Your current access token</label>
+        <textarea id="token-box" rows="4" readonly class="mono"
+                  style="font-size:.78rem"></textarea>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="copy-token">Copy token</button>
+      <hr class="divider">
+      <h3 style="font-size:1rem">Example</h3>
+      <div class="code-card">
+        <div class="code-head"><span class="label">bash</span></div>
+<pre id="curl-example"></pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- --------------------------------------------------------- topup modal -->
+<div class="modal-back hide" id="topup-modal">
+  <div class="modal">
+    <h2>Top up credits</h2>
+    <p class="muted" style="font-size:.9rem">
+      Buy another bundle. Credits are added to your existing balance.
+    </p>
+    <div id="topup-msg" class="hide"></div>
+
+    <div class="field">
+      <label for="topup-plan">Bundle</label>
+      <select id="topup-plan"></select>
+    </div>
+
+    <div class="field" id="topup-card-field">
+      <label>Card</label>
+      <div class="card-token" id="topup-card"></div>
+      <span class="hint" id="topup-card-hint">Loading secure card field…</span>
+    </div>
+
+    <div class="order-summary" style="margin:0">
+      <div class="order-row total">
+        <span>Total</span>
+        <span id="topup-total">—</span>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="topup-cancel" type="button">Cancel</button>
+      <button class="btn btn-primary" id="topup-pay" type="button">Pay</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/common.js"></script>
+<script src="/static/dashboard.js"></script>
+</body>
+</html>

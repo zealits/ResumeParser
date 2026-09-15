@@ -29,6 +29,10 @@ from middleware import (
     UsageTrackingMiddleware, SecurityHeadersMiddleware, 
     RequestLoggingMiddleware, FileSizeLimitMiddleware, CORSHeadersMiddleware
 )
+from credits import CreditRefundMiddleware, require_credits
+from billing_routes import router as billing_router
+from web_routes import router as web_router
+from fastapi.staticfiles import StaticFiles
 from config import settings
 from models import (
     SubscriptionTier,
@@ -77,7 +81,12 @@ async def lifespan(app: FastAPI):
                 "contact_person": "System Administrator",
                 "role": "admin",
                 "status": "active",
-                "is_active": True
+                "is_active": True,
+                # Admins are never charged, but the fields must exist so the
+                # console and the ledger have something to read.
+                "credits_balance": 0,
+                "credits_used": 0,
+                "plan_key": None
             }
             
             result = await auth_manager.create_user_account(admin_data)
@@ -107,6 +116,9 @@ app = FastAPI(
 )
 
 # Add middleware in order (last added is first executed)
+# Outermost of the credit stack: refunds a charge when the handler ends up
+# returning an error, so a failed call never costs the caller anything.
+app.add_middleware(CreditRefundMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(FileSizeLimitMiddleware, max_file_size=settings.MAX_FILE_SIZE)
@@ -124,9 +136,19 @@ app.add_middleware(CORSHeadersMiddleware, allowed_origins=settings.ALLOWED_ORIGI
 
 # Include authentication routes
 app.include_router(auth_router)
+app.include_router(billing_router)
 
-@app.get("/")
-async def root():
+# Browser UI on the same port as the API.
+app.mount(
+    "/static",
+    StaticFiles(directory=str(Path(__file__).parent / "web" / "static")),
+    name="static",
+)
+app.include_router(web_router)
+
+@app.get("/api/status")
+async def api_status():
+    """JSON service banner. Previously served at '/', which is now the UI."""
     return {"message": "Resume Parser API is running", "status": "healthy"}
 
 @app.get("/health")
@@ -232,7 +254,7 @@ def extract_candidate_summary(doc: Dict[str, Any]) -> Dict[str, Any]:
 async def parse_resume(
     request: Request,
     file: UploadFile = File(..., description="Resume PDF file"),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_credits("parse_resume"))
 ):
     """
     Parse a resume PDF file and return structured JSON data.
@@ -300,7 +322,7 @@ async def parse_resume(
 async def parse_resume_text(
     request: Request,
     resume_text: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_credits("parse_resume_text"))
 ):
     """
     Parse resume information from raw text.
@@ -352,7 +374,7 @@ async def parse_resume_text(
 async def analyze_github_profile_endpoint(
     request: Request,
     payload: GitHubProfileRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_credits("github_analysis"))
 ):
     """
     Analyze a GitHub profile by fetching user details and top repositories.
@@ -659,7 +681,7 @@ async def get_candidate_summary(
 async def generate_candidate_test(
     request: Request,
     candidate_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_credits("generate_test"))
 ):
     """
     Generate a technical test for a candidate based on their profile summary.
@@ -730,7 +752,7 @@ async def evaluate_candidate_test(
     request: Request,
     candidate_id: str,
     payload: Dict[str, Any] = Body(...),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_credits("evaluate_test"))
 ):
     """
     Evaluate a candidate's answers for a given test.
@@ -1226,7 +1248,7 @@ async def get_ranked_candidates(
         },
         description="Filters for candidate search (use null for any filter to ignore it)"
     ),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_credits("ranked_candidates"))
 ):
     """
     Get ranked candidates based on project ID.

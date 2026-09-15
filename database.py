@@ -15,6 +15,7 @@ class MongoDB:
         self.api_calls_collection = None
         self.candidates_collection = None
         self.projects_collection = None
+        self.credit_tx_collection = None
 
     async def connect(self):
         """Connect to MongoDB"""
@@ -30,6 +31,7 @@ class MongoDB:
             self.users_collection = self.database.users
             self.usage_collection = self.database.usage_stats
             self.api_calls_collection = self.database.api_calls
+            self.credit_tx_collection = self.database.credit_transactions
             
             # Initialize candidates collection (from environment or default)
             candidates_col_name = os.getenv("MONGO_COL", "candidates")
@@ -69,6 +71,15 @@ class MongoDB:
             await self.api_calls_collection.create_index("endpoint")
             await self.api_calls_collection.create_index([("user_id", 1), ("timestamp", 1)])
             
+            # Credit transaction ledger indexes
+            await self.credit_tx_collection.create_index([("user_id", 1), ("created_at", -1)])
+            await self.credit_tx_collection.create_index("type")
+            # Square payment ids are unique per charge; sparse so ledger rows
+            # without one (debits, refunds, grants) are not forced to collide.
+            await self.credit_tx_collection.create_index(
+                "square_payment_id", unique=True, sparse=True
+            )
+
             # Candidates collection indexes
             await self.candidates_collection.create_index("_id", unique=True)
             await self.candidates_collection.create_index("created_at")
@@ -175,9 +186,25 @@ class MongoDB:
             return False
 
     async def get_all_users(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get all users with pagination"""
+        """Get all users with pagination.
+
+        Secrets are projected out at the query, so password hashes and reset
+        tokens can never reach an API response by accident.
+        """
         try:
-            cursor = self.users_collection.find().skip(skip).limit(limit)
+            cursor = (
+                self.users_collection.find(
+                    {},
+                    {
+                        "hashed_password": 0,
+                        "password_reset_token": 0,
+                        "password_reset_expires": 0,
+                    },
+                )
+                .sort("created_at", -1)
+                .skip(skip)
+                .limit(limit)
+            )
             users = []
             async for user in cursor:
                 user["id"] = str(user["_id"])
@@ -281,7 +308,11 @@ class MongoDB:
                 }}
             ]
             tier_stats = await self.users_collection.aggregate(tier_pipeline).to_list(None)
-            usage_by_tier = {stat["_id"]: stat["total_calls"] for stat in tier_stats}
+            # A user saved without a tier groups under null, which is not a
+            # valid key for the Dict[str, int] response model.
+            usage_by_tier = {
+                (stat["_id"] or "unknown"): stat["total_calls"] for stat in tier_stats
+            }
             
             # Daily usage for the last N days
             daily_pipeline = [
@@ -293,7 +324,15 @@ class MongoDB:
                 }},
                 {"$sort": {"_id": 1}}
             ]
-            daily_usage = await self.usage_collection.aggregate(daily_pipeline).to_list(None)
+            daily_rows = await self.usage_collection.aggregate(daily_pipeline).to_list(None)
+            # Expose the grouping key as "date" rather than Mongo's "_id".
+            daily_usage = [
+                {
+                    "date": row.pop("_id"),
+                    **row,
+                }
+                for row in daily_rows
+            ]
             
             # Top users by API calls
             top_users_pipeline = [
@@ -307,7 +346,13 @@ class MongoDB:
                     "company_name": 1
                 }}
             ]
-            top_users = await self.users_collection.aggregate(top_users_pipeline).to_list(None)
+            top_rows = await self.users_collection.aggregate(top_users_pipeline).to_list(None)
+            # $project keeps _id, and a raw ObjectId is not JSON-serializable,
+            # which made this whole endpoint 500.
+            top_users = []
+            for row in top_rows:
+                row["id"] = str(row.pop("_id"))
+                top_users.append(row)
             
             return {
                 "total_users": total_users,
@@ -322,7 +367,18 @@ class MongoDB:
             
         except Exception as e:
             print(f"❌ Error getting analytics data: {e}")
-            return {}
+            # Return a valid empty shape: an {} here would fail to unpack into
+            # AnalyticsResponse and turn a read error into a 500.
+            return {
+                "total_users": 0,
+                "active_users": 0,
+                "total_api_calls": 0,
+                "total_processing_time": 0.0,
+                "average_response_time": 0.0,
+                "usage_by_tier": {},
+                "daily_usage": [],
+                "top_users": [],
+            }
 
     async def check_rate_limit(self, user_id: str) -> Dict[str, Any]:
         """Check if user has exceeded rate limits"""
@@ -368,6 +424,210 @@ class MongoDB:
         except Exception as e:
             print(f"❌ Error checking rate limit: {e}")
             return {"allowed": False, "reason": "Error checking limits"}
+
+    # ------------------------------------------------------------------
+    # Credit Billing Methods
+    # ------------------------------------------------------------------
+    async def _log_credit_tx(self, doc: Dict[str, Any]) -> Optional[str]:
+        """Append a row to the credit ledger."""
+        try:
+            doc.setdefault("created_at", datetime.utcnow())
+            result = await self.credit_tx_collection.insert_one(doc)
+            return str(result.inserted_id)
+        except Exception as e:
+            print(f"Error writing credit transaction: {e}")
+            return None
+
+    async def get_credit_balance(self, user_id: str) -> int:
+        """Current credit balance for a user, or 0 if unknown."""
+        try:
+            from bson import ObjectId
+            user = await self.users_collection.find_one(
+                {"_id": ObjectId(user_id)}, {"credits_balance": 1}
+            )
+            return int(user.get("credits_balance", 0)) if user else 0
+        except Exception as e:
+            print(f"Error reading credit balance: {e}")
+            return 0
+
+    async def deduct_credits(self, user_id: str, amount: int, operation: str) -> bool:
+        """
+        Atomically charge `amount` credits.
+
+        The balance guard lives in the query filter, so MongoDB only applies
+        the decrement when the funds are actually there. Two concurrent calls
+        against a balance of 1 can therefore never both succeed.
+        """
+        if amount <= 0:
+            return True
+        try:
+            from bson import ObjectId
+            updated = await self.users_collection.find_one_and_update(
+                {"_id": ObjectId(user_id), "credits_balance": {"$gte": amount}},
+                {
+                    "$inc": {"credits_balance": -amount, "credits_used": amount},
+                    "$set": {"updated_at": datetime.utcnow()},
+                },
+                projection={"credits_balance": 1},
+                return_document=True,
+            )
+            if not updated:
+                return False
+
+            await self._log_credit_tx({
+                "user_id": user_id,
+                "type": "debit",
+                "operation": operation,
+                "credits": -amount,
+                "balance_after": int(updated.get("credits_balance", 0)),
+            })
+            return True
+        except Exception as e:
+            print(f"Error deducting credits: {e}")
+            return False
+
+    async def refund_credits(
+        self, user_id: str, amount: int, operation: str, reason: str = ""
+    ) -> bool:
+        """Return credits taken for a call that did not succeed."""
+        if amount <= 0:
+            return True
+        try:
+            from bson import ObjectId
+            updated = await self.users_collection.find_one_and_update(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$inc": {"credits_balance": amount, "credits_used": -amount},
+                    "$set": {"updated_at": datetime.utcnow()},
+                },
+                projection={"credits_balance": 1},
+                return_document=True,
+            )
+            if not updated:
+                return False
+
+            await self._log_credit_tx({
+                "user_id": user_id,
+                "type": "refund",
+                "operation": operation,
+                "reason": reason,
+                "credits": amount,
+                "balance_after": int(updated.get("credits_balance", 0)),
+            })
+            return True
+        except Exception as e:
+            print(f"Error refunding credits: {e}")
+            return False
+
+    async def add_credits(
+        self,
+        user_id: str,
+        amount: int,
+        source: str,
+        plan_key: Optional[str] = None,
+        square_payment_id: Optional[str] = None,
+        amount_cents: Optional[int] = None,
+        note: Optional[str] = None,
+    ) -> bool:
+        """
+        Credit an account after a purchase, a signup grant, or an admin grant.
+
+        When `square_payment_id` is supplied the ledger row carries it, and the
+        unique sparse index on that field makes a replayed payment fail rather
+        than silently granting credits twice.
+        """
+        if amount <= 0:
+            return False
+        try:
+            from bson import ObjectId
+
+            if square_payment_id:
+                existing = await self.credit_tx_collection.find_one(
+                    {"square_payment_id": square_payment_id}
+                )
+                if existing:
+                    print(f"Payment {square_payment_id} already credited; skipping")
+                    return False
+
+            updated = await self.users_collection.find_one_and_update(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$inc": {"credits_balance": amount},
+                    "$set": {"updated_at": datetime.utcnow()},
+                },
+                projection={"credits_balance": 1},
+                return_document=True,
+            )
+            if not updated:
+                return False
+
+            await self._log_credit_tx({
+                "user_id": user_id,
+                "type": "purchase" if square_payment_id else source,
+                "source": source,
+                "plan_key": plan_key,
+                "square_payment_id": square_payment_id,
+                "amount_cents": amount_cents,
+                "note": note,
+                "credits": amount,
+                "balance_after": int(updated.get("credits_balance", 0)),
+            })
+            return True
+        except Exception as e:
+            print(f"Error adding credits: {e}")
+            return False
+
+    async def get_credit_transactions(
+        self, user_id: str, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """Most recent ledger rows for a user, newest first."""
+        try:
+            rows = []
+            cursor = (
+                self.credit_tx_collection.find({"user_id": user_id})
+                .sort("created_at", -1)
+                .limit(max(1, min(limit, 200)))
+            )
+            async for row in cursor:
+                row["id"] = str(row.pop("_id"))
+                rows.append(row)
+            return rows
+        except Exception as e:
+            print(f"Error reading credit transactions: {e}")
+            return []
+
+    async def get_revenue_summary(self, days: int = 30) -> Dict[str, Any]:
+        """Purchase totals for the admin dashboard."""
+        try:
+            since = datetime.utcnow() - timedelta(days=days)
+            pipeline = [
+                {"$match": {"type": "purchase", "created_at": {"$gte": since}}},
+                {
+                    "$group": {
+                        "_id": None,
+                        "gross_cents": {"$sum": "$amount_cents"},
+                        "credits_sold": {"$sum": "$credits"},
+                        "payments": {"$sum": 1},
+                    }
+                },
+            ]
+            agg = await self.credit_tx_collection.aggregate(pipeline).to_list(length=1)
+            row = agg[0] if agg else {}
+            return {
+                "period_days": days,
+                "gross_cents": int(row.get("gross_cents") or 0),
+                "credits_sold": int(row.get("credits_sold") or 0),
+                "payments": int(row.get("payments") or 0),
+            }
+        except Exception as e:
+            print(f"Error building revenue summary: {e}")
+            return {
+                "period_days": days,
+                "gross_cents": 0,
+                "credits_sold": 0,
+                "payments": 0,
+            }
+
 
 # Global database instance
 db = MongoDB()

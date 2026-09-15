@@ -130,6 +130,45 @@ class Settings:
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "admin123")
     
     # ===========================================
+    # Square Payments Configuration
+    # ===========================================
+    # Card data is tokenized in Square's own iframe (Web Payments SDK) and
+    # never reaches this server - we only ever receive a single-use token.
+    SQUARE_ENVIRONMENT: str = os.getenv("SQUARE_ENVIRONMENT", "sandbox")  # sandbox | production
+    SQUARE_ACCESS_TOKEN: Optional[str] = os.getenv("SQUARE_ACCESS_TOKEN")
+    SQUARE_APPLICATION_ID: Optional[str] = os.getenv("SQUARE_APPLICATION_ID")
+    SQUARE_LOCATION_ID: Optional[str] = os.getenv("SQUARE_LOCATION_ID")
+    SQUARE_API_VERSION: str = os.getenv("SQUARE_API_VERSION", "2024-10-17")
+    SQUARE_CURRENCY: str = os.getenv("SQUARE_CURRENCY", "USD")
+
+    @classmethod
+    def square_api_base(cls) -> str:
+        """Base URL for the Square Connect API for the configured environment."""
+        if cls.SQUARE_ENVIRONMENT.strip().lower() == "production":
+            return "https://connect.squareup.com"
+        return "https://connect.squareupsandbox.com"
+
+    @classmethod
+    def square_configured(cls) -> bool:
+        """True when all credentials needed to take a card payment are present."""
+        return bool(
+            cls.SQUARE_ACCESS_TOKEN
+            and cls.SQUARE_APPLICATION_ID
+            and cls.SQUARE_LOCATION_ID
+        )
+
+    # ===========================================
+    # Credit Billing Configuration
+    # ===========================================
+    # Credits charged per metered API call. Override any of these in .env.
+    CREDIT_COST_PARSE_RESUME: int = int(os.getenv("CREDIT_COST_PARSE_RESUME", "1"))
+    CREDIT_COST_PARSE_RESUME_TEXT: int = int(os.getenv("CREDIT_COST_PARSE_RESUME_TEXT", "1"))
+    CREDIT_COST_GITHUB_ANALYSIS: int = int(os.getenv("CREDIT_COST_GITHUB_ANALYSIS", "2"))
+    CREDIT_COST_RANKED_CANDIDATES: int = int(os.getenv("CREDIT_COST_RANKED_CANDIDATES", "2"))
+    CREDIT_COST_GENERATE_TEST: int = int(os.getenv("CREDIT_COST_GENERATE_TEST", "3"))
+    CREDIT_COST_EVALUATE_TEST: int = int(os.getenv("CREDIT_COST_EVALUATE_TEST", "3"))
+
+    # ===========================================
     # API Documentation
     # ===========================================
     API_DOCS_ENABLED: bool = os.getenv("API_DOCS_ENABLED", "true").lower() == "true"

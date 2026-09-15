@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin console — Resume Parser API</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="admin-theme">
+
+<div class="app-bar">
+  <div class="app-bar-inner">
+    <a class="brand" href="/superadmin/console">
+      <span class="brand-mark">⚡</span> Resume Parser
+    </a>
+    <span class="badge badge-warn">Admin console</span>
+    <div style="margin-left:auto;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <span class="muted" style="font-size:.88rem" id="who">—</span>
+      <a class="btn btn-ghost btn-sm" href="/docs">API docs</a>
+      <button class="btn btn-quiet btn-sm" id="logout">Log out</button>
+    </div>
+  </div>
+</div>
+
+<main class="app-main">
+  <div id="msg" class="hide"></div>
+
+  <div class="page-head">
+    <div>
+      <h1>System overview</h1>
+      <p class="muted">Users, credit balances and revenue across the platform.</p>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" id="refresh">Refresh</button>
+  </div>
+
+  <div class="grid grid-4" style="margin-bottom:30px">
+    <div class="metric">
+      <div class="k">Total users</div>
+      <div class="v" id="m-users">—</div>
+      <div class="sub" id="m-active">—</div>
+    </div>
+    <div class="metric accent">
+      <div class="k">Revenue (30 days)</div>
+      <div class="v" id="m-revenue">—</div>
+      <div class="sub" id="m-payments">—</div>
+    </div>
+    <div class="metric ok">
+      <div class="k">Credits sold (30 days)</div>
+      <div class="v" id="m-sold">—</div>
+      <div class="sub">Across all bundles</div>
+    </div>
+    <div class="metric">
+      <div class="k">API calls (30 days)</div>
+      <div class="v" id="m-calls">—</div>
+      <div class="sub" id="m-avg">—</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="users">Users</button>
+    <button class="tab" data-tab="ledger">Credit ledger</button>
+    <button class="tab" data-tab="costs">Credit costs</button>
+  </div>
+
+  <!-- ------------------------------------------------------------ users -->
+  <section data-panel="users">
+    <div class="card">
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+        <h3 style="margin:0">All accounts</h3>
+        <div class="spacer" style="margin-left:auto"></div>
+        <input id="search" placeholder="Filter by username, email or plan…"
+               style="max-width:290px">
+      </div>
+      <div class="table-wrap" style="margin-top:14px">
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Plan</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th class="num">Credits</th>
+              <th class="num">Spent</th>
+              <th>Joined</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-body">
+            <tr><td colspan="8" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- ledger -->
+  <section data-panel="ledger" hidden>
+    <div class="card">
+      <h3>Recent credit activity</h3>
+      <p class="muted" style="font-size:.88rem">
+        Newest 100 rows across every account.
+      </p>
+      <div class="table-wrap" style="margin-top:14px">
+        <table>
+          <thead>
+            <tr>
+              <th>When</th><th>User</th><th>Type</th><th>Detail</th>
+              <th class="num">Credits</th><th class="num">Paid</th>
+            </tr>
+          </thead>
+          <tbody id="ledger-body">
+            <tr><td colspan="6" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ costs -->
+  <section data-panel="costs" hidden>
+    <div class="card" style="max-width:620px">
+      <h3>Credit cost per call</h3>
+      <p class="muted" style="font-size:.88rem">
+        Set with <code>CREDIT_COST_*</code> in <code>.env</code>; a restart
+        picks up changes.
+      </p>
+      <div class="table-wrap" style="margin-top:14px">
+        <table>
+          <thead><tr><th>Operation</th><th>Env var</th><th class="num">Credits</th></tr></thead>
+          <tbody id="costs-body">
+            <tr><td colspan="3" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ---------------------------------------------------------- grant modal -->
+<div class="modal-back hide" id="grant-modal">
+  <div class="modal">
+    <h2>Grant credits</h2>
+    <p class="muted" style="font-size:.9rem" id="grant-who">—</p>
+    <div id="grant-msg" class="hide"></div>
+    <div class="field">
+      <label for="grant-amount">Credits to add</label>
+      <input id="grant-amount" type="number" min="1" max="1000000" value="100">
+    </div>
+    <div class="field">
+      <label for="grant-note">Note <span class="muted">(optional)</span></label>
+      <input id="grant-note" maxlength="500" placeholder="Offline payment, goodwill, trial extension…">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="grant-cancel" type="button">Cancel</button>
+      <button class="btn btn-primary" id="grant-save" type="button">Grant credits</button>
+    </div>
+  </div>
+</div>
+
+<!-- --------------------------------------------------------- confirm modal -->
+<div class="modal-back hide" id="confirm-modal">
+  <div class="modal" style="max-width:420px">
+    <h2 id="confirm-title">Are you sure?</h2>
+    <p class="muted" id="confirm-text" style="font-size:.92rem">—</p>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="confirm-no" type="button">Cancel</button>
+      <button class="btn btn-danger" id="confirm-yes" type="button">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/common.js"></script>
+<script src="/static/admin.js"></script>
+</body>
+</html>

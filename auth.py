@@ -122,7 +122,10 @@ class AuthManager:
             "company_name": user_data.get("company_name"),
             "contact_person": user_data.get("contact_person"),
             "status": UserStatus.ACTIVE,
-            "role": UserRole.USER,
+            "role": user_data.get("role", UserRole.USER),
+            "plan_key": user_data.get("plan_key"),
+            "credits_balance": user_data.get("credits_balance", 0),
+            "credits_used": 0,
             "created_at": datetime.utcnow(),
             "is_active": True
         }
@@ -183,7 +186,11 @@ class AuthManager:
                 "status": user.get("status", UserStatus.ACTIVE),
                 "created_at": user.get("created_at"),
                 "last_login": datetime.utcnow(),
-                "is_active": user.get("is_active", True)
+                "is_active": user.get("is_active", True),
+                "role": user.get("role", UserRole.USER),
+                "credits_balance": user.get("credits_balance", 0),
+                "credits_used": user.get("credits_used", 0),
+                "plan_key": user.get("plan_key")
             }
         }
 

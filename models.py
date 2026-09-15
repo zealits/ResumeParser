@@ -47,6 +47,10 @@ class UserResponse(BaseModel):
     created_at: datetime
     last_login: Optional[datetime]
     is_active: bool
+    role: UserRole = UserRole.USER
+    credits_balance: int = 0
+    credits_used: int = 0
+    plan_key: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -77,6 +81,46 @@ class RateLimitResponse(BaseModel):
     limit: int
     remaining: int
     reset_time: datetime
+
+# Billing & Self-Serve Signup Models
+class SignupRequest(BaseModel):
+    """Self-serve signup. `source_id` is required for any paid plan."""
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=72)
+    plan_key: str = Field(..., description="Key from CREDIT_PLANS, e.g. 'basic'")
+    company_name: Optional[str] = Field(None, max_length=200)
+    contact_person: Optional[str] = Field(None, max_length=200)
+    # Single-use card token produced by Square's Web Payments SDK in the
+    # browser. Never a card number.
+    source_id: Optional[str] = Field(None, description="Square card nonce")
+    idempotency_key: Optional[str] = Field(None, max_length=64)
+
+
+class TopUpRequest(BaseModel):
+    """Buy another credit bundle for an existing account."""
+    plan_key: str = Field(..., description="Key from CREDIT_PLANS")
+    source_id: str = Field(..., description="Square card nonce")
+    idempotency_key: Optional[str] = Field(None, max_length=64)
+
+
+class AdminGrantCreditsRequest(BaseModel):
+    """Admin-issued credits, e.g. goodwill or a manual/offline payment."""
+    credits: int = Field(..., gt=0, le=1_000_000)
+    note: Optional[str] = Field(None, max_length=500)
+
+
+class CreditTransactionResponse(BaseModel):
+    id: str
+    type: str
+    credits: int
+    balance_after: Optional[int] = None
+    operation: Optional[str] = None
+    plan_key: Optional[str] = None
+    amount_cents: Optional[int] = None
+    note: Optional[str] = None
+    created_at: datetime
+
 
 # MongoDB Document Models (for Motor/PyMongo)
 class UserDocument:

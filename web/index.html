@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resume Parser API — credit-based resume intelligence</title>
+<meta name="description" content="Parse resumes, analyze GitHub profiles, rank candidates and generate technical tests through one API. Pay with credits.">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark">◈</span>
+      Resume Parser
+    </a>
+    <div class="nav-links">
+      <a href="#features" class="nav-hide">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#credits" class="nav-hide">Credits</a>
+      <a href="/docs" class="nav-hide">API docs</a>
+      <a class="btn btn-ghost btn-sm" href="/login" id="nav-login">Log in</a>
+      <a class="btn btn-primary btn-sm" href="#pricing" id="nav-cta">Get started</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ---------------------------------------------------------------- hero -->
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">
+        <span class="pill">New</span>
+        Credit-based pricing — <b>pay only for calls you make</b>
+      </span>
+      <h1>Turn raw resumes into <span class="grad">structured hiring signal</span></h1>
+      <p class="hero-lede">
+        One API for resume parsing, GitHub profile analysis, semantic candidate
+        ranking, and auto-generated technical tests. Buy a bundle of credits and
+        spend them as you go — no seats, no monthly minimum.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="#pricing">See pricing</a>
+        <a class="btn btn-ghost btn-lg" href="/docs">Read the API docs</a>
+      </div>
+      <div class="hero-trust">
+        <div><b id="stat-endpoints">6</b> metered endpoints</div>
+        <div><b id="stat-free">50</b> free credits to start</div>
+        <div><b id="stat-cheapest">—</b> per credit at scale</div>
+      </div>
+    </div>
+
+    <div class="code-card" aria-hidden="true">
+      <div class="code-head">
+        <span class="dot" style="background:#f43f5e"></span>
+        <span class="dot" style="background:#f59e0b"></span>
+        <span class="dot" style="background:#10b981"></span>
+        <span class="label">POST /parse-resume</span>
+      </div>
+<pre><span class="tok-com"># 1 credit per parse</span>
+<span class="tok-cmd">curl</span> -X POST http://localhost:2010/parse-resume \
+  -H <span class="tok-str">"Authorization: Bearer $TOKEN"</span> \
+  -F <span class="tok-str">"file=@resume.pdf"</span>
+
+{
+  <span class="tok-key">"name"</span>: <span class="tok-str">"Priya Raman"</span>,
+  <span class="tok-key">"seniority_level"</span>: <span class="tok-str">"senior"</span>,
+  <span class="tok-key">"years_experience"</span>: <span class="tok-num">8</span>,
+  <span class="tok-key">"skills"</span>: [<span class="tok-str">"python"</span>, <span class="tok-str">"fastapi"</span>, <span class="tok-str">"mongodb"</span>],
+  <span class="tok-key">"has_leadership"</span>: <span class="tok-num">true</span>,
+  <span class="tok-key">"credits_remaining"</span>: <span class="tok-num">999</span>
+}</pre>
+    </div>
+  </div>
+</header>
+
+<!-- ------------------------------------------------------------ features -->
+<section class="section section-alt" id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Capabilities</div>
+      <h2>Everything the hiring pipeline needs</h2>
+      <p>Six endpoints that turn unstructured applications into data you can filter, rank and act on.</p>
+    </div>
+    <div class="grid grid-3">
+      <div class="card feature">
+        <div class="ficon">📄</div>
+        <h3>Resume parsing</h3>
+        <p>Upload a PDF or paste raw text. Get back normalized name, skills, education, seniority and experience as JSON.</p>
+      </div>
+      <div class="card feature">
+        <div class="ficon">🐙</div>
+        <h3>GitHub analysis</h3>
+        <p>Point at a profile URL and get top repositories, language mix and real signals of shipped work.</p>
+      </div>
+      <div class="card feature">
+        <div class="ficon">🎯</div>
+        <h3>Semantic ranking</h3>
+        <p>Vector search over your candidate pool ranks applicants against a project brief, with filters for seniority and leadership.</p>
+      </div>
+      <div class="card feature">
+        <div class="ficon">🧪</div>
+        <h3>Test generation</h3>
+        <p>Generate a technical test tailored to a specific candidate's profile, then score their submission automatically.</p>
+      </div>
+      <div class="card feature">
+        <div class="ficon">📊</div>
+        <h3>Usage analytics</h3>
+        <p>Every call is logged with latency and outcome. See exactly where your credits went, per endpoint and per day.</p>
+      </div>
+      <div class="card feature">
+        <div class="ficon">🔐</div>
+        <h3>JWT auth</h3>
+        <p>Bearer-token auth on every endpoint, per-account credit isolation, and a full ledger of debits and refunds.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- pricing -->
+<section class="section" id="pricing">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Pricing</div>
+      <h2>Buy credits, spend them anywhere</h2>
+      <p>
+        Credits never expire and work across every endpoint. Start free — no
+        card needed — then top up whenever you run low.
+      </p>
+    </div>
+
+    <div id="pay-warning" class="hide"></div>
+    <div class="price-grid" id="price-grid">
+      <!-- rendered by landing.js -->
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- credits -->
+<section class="section section-alt" id="credits">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Credit costs</div>
+      <h2>What each call costs</h2>
+      <p>Heavier calls cost more because they cost us more. Nothing is metered twice, and a failed call is refunded automatically.</p>
+    </div>
+    <div style="max-width:720px;margin:0 auto">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Operation</th>
+              <th class="num">Credits</th>
+              <th class="num">Calls per 1,000</th>
+            </tr>
+          </thead>
+          <tbody id="cost-body">
+            <tr><td colspan="3" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:.86rem;margin-top:14px">
+        Credits are deducted before the work starts so concurrent calls can
+        never overspend your balance. If a call fails, the credits go straight
+        back to your account.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ---------------------------------------------------------------- cta -->
+<section class="section">
+  <div class="wrap">
+    <div class="card card-pad-lg center" style="max-width:720px;margin:0 auto">
+      <h2 style="font-size:1.7rem">Start with 50 free credits</h2>
+      <p style="max-width:48ch;margin:0 auto 24px">
+        Enough to parse 50 resumes. No card required, and you keep the account
+        when you upgrade.
+      </p>
+      <div style="display:flex;gap:11px;justify-content:center;flex-wrap:wrap">
+        <a class="btn btn-primary btn-lg" href="/signup?plan=free">Create free account</a>
+        <a class="btn btn-ghost btn-lg" href="/login">I already have one</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <span>Resume Parser API</span>
+    <span class="spacer"></span>
+    <a href="/docs">API docs</a>
+    <a href="/health">Status</a>
+    <a href="/superadmin">Admin</a>
+  </div>
+</footer>
+
+<script src="/static/common.js"></script>
+<script src="/static/landing.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "resume-parser-api",
+      "runtimeExecutable": "C:\\Users\\9421309441\\Desktop\\ResumeParser\\venv\\Scripts\\python.exe",
+      "runtimeArgs": ["C:\\Users\\9421309441\\Desktop\\ResumeParser\\main.py"],
+      "port": 2010
+    }
+  ]
+}

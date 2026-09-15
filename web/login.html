@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in — Resume Parser API</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<div class="auth-shell">
+  <div class="auth-card">
+    <div class="auth-head">
+      <a class="brand" href="/"><span class="brand-mark">◈</span> Resume Parser</a>
+      <h1>Welcome back</h1>
+      <p class="dim" style="margin:0">Log in to see your credits and usage.</p>
+    </div>
+
+    <div id="msg" class="hide"></div>
+
+    <form id="login-form" novalidate>
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required
+               placeholder="your-username" autofocus>
+        <span class="hint">Log in with your username, not your email address.</span>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password"
+               autocomplete="current-password" required placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary btn-block btn-lg" id="submit" type="submit">
+        Log in
+      </button>
+    </form>
+
+    <div class="auth-foot">
+      No account yet? <a href="/#pricing">Pick a plan</a>
+      · <a href="/signup?plan=free">start free</a>
+    </div>
+  </div>
+</div>
+
+<script src="/static/common.js"></script>
+<script>
+(function () {
+  const form = document.getElementById('login-form');
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('submit');
+
+  if (qs('expired')) showAlert(msg, 'warn', 'Your session expired. Please log in again.');
+
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    showAlert(msg, null, null);
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    if (!username || !password) {
+      showAlert(msg, 'error', 'Enter your username and password.');
+      return;
+    }
+
+    const done = busy(btn, 'Logging in…');
+    try {
+      const auth = await api('/auth/login', {
+        method: 'POST',
+        auth: false,
+        body: { username: username, password: password }
+      });
+      Auth.save(auth);
+      // Admins get the console; everyone else the customer dashboard.
+      location.replace(Auth.isAdmin() ? '/superadmin/console' : '/dashboard');
+    } catch (err) {
+      done();
+      showAlert(msg, 'error', err.message);
+    }
+  });
+})();
+</script>
+</body>
+</html>

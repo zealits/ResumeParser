@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create your account — Resume Parser API</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="/"><span class="brand-mark">◈</span> Resume Parser</a>
+    <div class="nav-links">
+      <a href="/#pricing">Change plan</a>
+      <a class="btn btn-ghost btn-sm" href="/login">Log in</a>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap" style="max-width:560px;padding-block:52px 80px">
+  <h1 style="font-size:1.9rem">Create your account</h1>
+  <p id="plan-lede">Loading plan…</p>
+
+  <div id="msg" class="hide"></div>
+
+  <div class="order-summary" id="summary" hidden>
+    <div class="order-row">
+      <span class="lbl">Plan</span>
+      <span id="sum-plan" class="mono">—</span>
+    </div>
+    <div class="order-row">
+      <span class="lbl">Credits</span>
+      <span id="sum-credits" class="mono">—</span>
+    </div>
+    <div class="order-row total">
+      <span>Total today</span>
+      <span id="sum-total">—</span>
+    </div>
+  </div>
+
+  <form id="signup-form" novalidate>
+    <div class="row">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" autocomplete="username" required placeholder="jordan-hr"
+               minlength="3" maxlength="50">
+        <span class="hint">3–50 characters. This is what you log in with.</span>
+      </div>
+      <div class="field">
+        <label for="email">Work email</label>
+        <input id="email" type="email" autocomplete="email" required
+               placeholder="you@company.com">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="new-password" required
+             minlength="8" maxlength="72" placeholder="At least 8 characters">
+      <span class="hint">Minimum 8 characters.</span>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="company">Company <span class="muted">(optional)</span></label>
+        <input id="company" autocomplete="organization" placeholder="Acme Inc.">
+      </div>
+      <div class="field">
+        <label for="contact">Your name <span class="muted">(optional)</span></label>
+        <input id="contact" autocomplete="name" placeholder="Jordan Lee">
+      </div>
+    </div>
+
+    <!-- Card block is only shown for paid plans -->
+    <div id="card-block" hidden>
+      <hr class="divider">
+      <h3 style="margin-bottom:6px">Payment</h3>
+      <p class="muted" style="font-size:.86rem">
+        Card details are entered directly into Square's secure field and never
+        reach this server.
+      </p>
+      <div class="field">
+        <label>Card</label>
+        <div class="card-token" id="card-container"></div>
+        <span class="hint" id="card-hint">Loading secure card field…</span>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-block btn-lg" id="submit" type="submit" disabled>
+      Continue
+    </button>
+
+    <p class="muted center" style="font-size:.82rem;margin:16px 0 0">
+      Credits never expire. You can top up any time from your dashboard.
+    </p>
+  </form>
+</main>
+
+<script src="/static/common.js"></script>
+<script src="/static/signup.js"></script>
+</body>
+</html>
