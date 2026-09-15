@@ -28,13 +28,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H dev.zealits.com >> ~/.ssh/known_hosts
+          ssh-keyscan -H 154.53.42.27 >> ~/.ssh/known_hosts
 
       # Step 7: Deploy to the server
       - name: Deploy to server
         if: github.ref == 'refs/heads/main'
         run: |
-          ssh admin@dev.zealits.com << 'EOF'
+          ssh admin@154.53.42.27 << 'EOF'
            echo "🔐 Starting deployment to remote server"
 
            if [ -f ~/ResumeParser/.env ]; then
