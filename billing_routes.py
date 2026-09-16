@@ -22,7 +22,7 @@ from auth import auth_manager, get_current_admin, get_current_user
 from config import settings
 from credits import (
     CREDIT_COSTS,
-    FREE_PLAN_KEY,
+    DEFAULT_PLAN_KEY,
     cost_table,
     get_plan,
     public_plans,

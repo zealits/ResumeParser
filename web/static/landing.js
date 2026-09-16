@@ -30,7 +30,7 @@
     const free = p.price_cents === 0;
     const per = p.per_credit
       ? '$' + p.per_credit.toFixed(3) + ' per credit'
-      : 'One-time grant';
+      : 'Included';
     return '' +
       '<div class="plan' + (p.popular ? ' popular' : '') + '">' +
         (p.popular ? '<span class="plan-badge">Most popular</span>' : '') +
@@ -74,9 +74,13 @@
   }).join('');
 
   /* ----------------------------------------------------- hero figures --- */
-  const free = data.plans.find(function (p) { return p.price_cents === 0; });
-  if (free) document.getElementById('stat-free').textContent = fmt.int(free.credits);
   document.getElementById('stat-endpoints').textContent = data.credit_costs.length;
+
+  // Cheapest plan is the entry price; plans arrive sorted cheapest first.
+  const entry = data.plans[0];
+  if (entry) {
+    document.getElementById('stat-entry').textContent = entry.price_display;
+  }
 
   const paid = data.plans.filter(function (p) { return p.per_credit; });
   if (paid.length) {

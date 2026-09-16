@@ -32,7 +32,8 @@
     return;
   }
 
-  const wanted = (qs('plan') || 'free').toLowerCase();
+  // Falls back to the cheapest plan; the API returns them cheapest first.
+  const wanted = (qs('plan') || (data.plans[0] && data.plans[0].key) || '').toLowerCase();
   plan = data.plans.find(function (p) { return p.key === wanted; });
   if (!plan) {
     showAlert(msg, 'error', 'That plan does not exist. Pick one from the pricing page.');
@@ -45,7 +46,8 @@
 
   document.getElementById('plan-lede').textContent = isFree
     ? 'Start with ' + fmt.int(plan.credits) + ' free credits. No card required.'
-    : 'You are buying the ' + plan.name + ' plan.';
+    : 'You are buying the ' + plan.name + ' plan — ' +
+      fmt.int(plan.credits) + ' credits for ' + plan.price_display + '.';
 
   summary.hidden = false;
   document.getElementById('sum-plan').textContent = plan.name;

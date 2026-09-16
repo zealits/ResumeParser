@@ -243,13 +243,26 @@ async function mountSquareCard(cfg, containerId) {
   const Square = await loadSquareSdk(cfg.environment);
   const payments = Square.payments(cfg.application_id, cfg.location_id);
   const card = await payments.card({
+    // Square's card iframe has a fixed white field - it rejects
+    // `backgroundColor` as an invalid style property, so it cannot be themed
+    // dark. Light text was therefore invisible (white on white). The field is
+    // styled as a deliberate light panel instead: dark ink on Square's white,
+    // framed by .card-token in styles.css so it reads as intentional.
     style: {
-      input: { color: "#e9eef9", fontSize: "15px" },
-      ".input-container": { borderColor: "#27334b", borderRadius: "9px" },
+      input: {
+        color: "#10151f",
+        fontSize: "16px",
+        fontWeight: "500",
+      },
+      "input::placeholder": { color: "#8a93a6" },
+      ".input-container": {
+        borderColor: "#c8cedb",
+        borderRadius: "8px",
+      },
       ".input-container.is-focus": { borderColor: "#6366f1" },
-      ".input-container.is-error": { borderColor: "#f43f5e" },
-      ".message-text": { color: "#a7b6d1" },
-      ".message-text.is-error": { color: "#fda4b4" },
+      ".input-container.is-error": { borderColor: "#e11d48" },
+      ".message-text": { color: "#5b6472" },
+      ".message-text.is-error": { color: "#be123c" },
     },
   });
   await card.attach("#" + containerId);

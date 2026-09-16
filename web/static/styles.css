@@ -647,12 +647,16 @@ select { cursor: pointer; }
 .modal-foot .btn { flex: 1; }
 
 /* ---------------------------------------------------------------- misc --- */
+/* Square's card iframe cannot be themed dark (it rejects backgroundColor), so
+   the field is dark ink on white. This wrapper turns that into a deliberate
+   light "payment panel" rather than a white rectangle that looks broken. */
 .card-token {
-  background: var(--bg-soft);
-  border: 1px solid var(--border);
+  background: #f4f6fa;
+  border: 1px solid #cfd6e4;
   border-radius: var(--radius-sm);
-  padding: 13px;
+  padding: 12px;
   min-height: 52px;
+  box-shadow: inset 0 1px 0 #fff, 0 1px 3px #0003;
 }
 /* Square injects its own iframe here; it must not be clipped. */
 #card-container { min-height: 90px; }

@@ -8,7 +8,7 @@ frontend server, no build step, no templating engine.
 | URL | Who | What |
 |---|---|---|
 | `/` | public | Landing page with the pricing section |
-| `/signup?plan=<key>` | public | Self-serve signup + card checkout |
+| `/signup?plan=<key>` | public | Self-serve signup + card checkout (defaults to the cheapest plan) |
 | `/login` | customers | Login; admins are redirected to the console |
 | `/dashboard` | customers | Credits, usage, ledger, top-ups, API token |
 | `/superadmin` | admins | Admin sign-in (amber theme, `noindex`) |
@@ -31,7 +31,8 @@ health checks keep working.
 5. The response includes a JWT, so the browser lands on `/dashboard` already
    logged in with `role: user`.
 
-The free plan skips steps 3–4 and grants its credits directly.
+There is no $0 plan, so every signup takes a card. The code still handles a
+$0 plan (it skips steps 3-4 and grants credits directly) if you add one.
 
 ## Credits
 
@@ -89,9 +90,18 @@ SQUARE_CURRENCY=USD
 Until all three IDs are set, `/api/billing/plans` reports
 `payments_enabled: false` and the UI says so plainly: the pricing page shows a
 notice, paid signup is blocked, and the top-up modal tells the user to ask an
-admin for a manual grant. The free plan works regardless.
+admin for a manual grant.
 
 Sandbox test card: `4111 1111 1111 1111`, any future expiry, CVV `111`.
+
+**Use `http://localhost:<port>`, not `http://127.0.0.1:<port>`.** Square's
+Web Payments SDK refuses to load outside a secure context and only treats
+`localhost` as one, so the card field silently fails on the IP form.
+
+Square's card iframe cannot be themed dark - it rejects `backgroundColor`
+as an invalid style property. The field is therefore dark ink on Square's
+white background, framed by `.card-token` so it reads as a deliberate
+light payment panel.
 
 Only `SQUARE_ACCESS_TOKEN` is secret. The application and location IDs are
 public by design — the browser SDK needs them — and are served from

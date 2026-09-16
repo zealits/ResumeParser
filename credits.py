@@ -27,15 +27,15 @@ logger = logging.getLogger(__name__)
 # price_cents is what Square charges. credits is what lands in the balance.
 # Edit freely - nothing below reads these values positionally.
 CREDIT_PLANS: Dict[str, Dict[str, Any]] = {
-    "free": {
-        "key": "free",
-        "name": "Free",
+    "starter": {
+        "key": "starter",
+        "name": "Starter",
         "tier": SubscriptionTier.FREE.value,
-        "price_cents": 0,
+        "price_cents": 200,
         "credits": 50,
-        "tagline": "Kick the tyres, no card required",
+        "tagline": "Try it on a real shortlist",
         "features": [
-            "50 credits, one time",
+            "50 credits",
             "Resume parsing & GitHub analysis",
             "5 MB max upload",
             "Community support",
@@ -86,7 +86,9 @@ CREDIT_PLANS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-FREE_PLAN_KEY = "free"
+# Cheapest plan, used as the default when /signup is opened without ?plan=.
+# There is no $0 plan any more, so every signup takes a card.
+DEFAULT_PLAN_KEY = "starter"
 
 
 def get_plan(plan_key: str) -> Optional[Dict[str, Any]]:
