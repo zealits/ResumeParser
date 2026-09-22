@@ -52,7 +52,7 @@
         '<div class="plan-price">' +
           '<span class="amt' + (contact ? ' amt-text' : '') + '">' +
             esc(p.price_display) + '</span>' +
-          '<span class="per">' + (contact ? '' : (free ? 'forever' : 'one-time')) + '</span>' +
+          '<span class="per">' + (contact ? '' : (free ? 'forever' : 'per month')) + '</span>' +
         '</div>' +
         '<div class="plan-credits">' +
           '<b>' + esc(creditsLabel) + '</b>' +
