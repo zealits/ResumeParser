@@ -50,7 +50,8 @@
         '<div class="plan-name">' + esc(p.name) + '</div>' +
         '<p class="plan-tag">' + esc(p.tagline || '') + '</p>' +
         '<div class="plan-price">' +
-          '<span class="amt">' + esc(p.price_display) + '</span>' +
+          '<span class="amt' + (contact ? ' amt-text' : '') + '">' +
+            esc(p.price_display) + '</span>' +
           '<span class="per">' + (contact ? '' : (free ? 'forever' : 'one-time')) + '</span>' +
         '</div>' +
         '<div class="plan-credits">' +

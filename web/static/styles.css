@@ -85,6 +85,7 @@ p { margin: 0 0 1rem; color: var(--text-dim); }
 code, pre, .mono { font-family: var(--mono); }
 
 .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+.wrap-pricing { width: 100%; max-width: 1200px; }
 .center { text-align: center; }
 .muted { color: var(--muted); }
 .dim { color: var(--text-dim); }
@@ -342,17 +343,26 @@ code, pre, .mono { font-family: var(--mono); }
 .feature p { margin: 0; font-size: .93rem; }
 
 /* ------------------------------------------------------------- pricing --- */
-.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: start; }
+.price-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+  width: 100%;
+  align-items: stretch;
+}
 
 .plan {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 26px 22px;
+  padding: 28px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
   position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
   transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 .plan:hover { border-color: var(--border-bright); transform: translateY(-3px); }
@@ -379,11 +389,26 @@ code, pre, .mono { font-family: var(--mono); }
   white-space: nowrap;
 }
 
-.plan-name { font-size: 1.03rem; font-weight: 650; }
+.plan-name { font-size: 1.08rem; font-weight: 650; }
 .plan-tag { font-size: .85rem; color: var(--muted); margin: -10px 0 0; }
 
-.plan-price { display: flex; align-items: baseline; gap: 7px; }
-.plan-price .amt { font-size: 2.5rem; font-weight: 750; letter-spacing: -0.03em; }
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  min-height: 3rem;
+}
+.plan-price .amt {
+  font-size: 2.5rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.plan-price .amt.amt-text {
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  letter-spacing: -0.02em;
+}
 .plan-price .per { font-size: .84rem; color: var(--muted); }
 
 .plan-credits {
@@ -412,6 +437,8 @@ code, pre, .mono { font-family: var(--mono); }
   font-size: .86rem;
   line-height: 1.6;
 }
+
+.plan .btn { margin-top: auto; }
 
 /* ---------------------------------------------------------------- table -- */
 .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
@@ -727,7 +754,7 @@ select { cursor: pointer; }
 
 /* --------------------------------------------------------- responsive --- */
 @media (max-width: 1000px) {
-  .price-grid { grid-template-columns: repeat(2, 1fr); }
+  .price-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -741,7 +768,7 @@ select { cursor: pointer; }
 }
 
 @media (max-width: 620px) {
-  .price-grid, .grid-4 { grid-template-columns: 1fr; }
+  .price-grid, .grid-4 { grid-template-columns: minmax(0, 1fr); }
   .row { grid-template-columns: 1fr; }
   .wrap, .app-main, .app-bar-inner, .nav-inner { padding-inline: 16px; }
   .auth-card { padding: 28px 22px; }
