@@ -45,7 +45,7 @@ CREDIT_PLANS: Dict[str, Dict[str, Any]] = {
         "key": "premium",
         "name": "Premium",
         "tier": SubscriptionTier.PREMIUM.value,
-        "price_cents": 11100,
+        "price_cents": 12000,
         "credits": 5000,
         "tagline": "For scaling recruitment",
         "popular": True,
