@@ -32,13 +32,32 @@
     return;
   }
 
-  // Falls back to the cheapest plan; the API returns them cheapest first.
-  const wanted = (qs('plan') || (data.plans[0] && data.plans[0].key) || '').toLowerCase();
+  // Falls back to the cheapest purchasable plan; contact-sales plans are last.
+  const fallback = (data.plans.find(function (p) {
+    return !p.contact_sales;
+  }) || data.plans[0] || {}).key || '';
+  const wanted = (qs('plan') || fallback).toLowerCase();
   plan = data.plans.find(function (p) { return p.key === wanted; });
   if (!plan) {
     showAlert(msg, 'error', 'That plan does not exist. Pick one from the pricing page.');
     document.getElementById('plan-lede').innerHTML =
       '<a href="/#pricing">Back to pricing</a>';
+    return;
+  }
+
+  if (plan.contact_sales) {
+    const mail = data.sales_email
+      ? 'mailto:' + encodeURIComponent(data.sales_email) +
+        '?subject=' + encodeURIComponent('Enterprise plan inquiry')
+      : '/#pricing';
+    showAlert(msg, 'warn',
+      'Enterprise is sold through sales. Email us for a custom quote.');
+    document.getElementById('plan-lede').innerHTML =
+      '<a href="' + mail + '">Contact sales</a> · <a href="/#pricing">Back to pricing</a>';
+    summary.hidden = true;
+    cardBlock.hidden = true;
+    btn.disabled = true;
+    btn.textContent = 'Contact sales';
     return;
   }
 

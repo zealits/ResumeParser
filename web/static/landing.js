@@ -28,9 +28,22 @@
   /* ----------------------------------------------------------- plans --- */
   grid.innerHTML = data.plans.map(function (p) {
     const free = p.price_cents === 0;
-    const per = p.per_credit
-      ? '$' + p.per_credit.toFixed(3) + ' per credit'
-      : 'Included';
+    const contact = !!p.contact_sales;
+    const per = contact
+      ? 'Custom volume'
+      : p.per_credit
+        ? '$' + p.per_credit.toFixed(3) + ' per credit'
+        : 'Included';
+    const creditsLabel = contact
+      ? 'Custom credits'
+      : fmt.int(p.credits) + ' credits';
+    const href = contact
+      ? 'mailto:' + encodeURIComponent(data.sales_email || '') +
+        '?subject=' + encodeURIComponent('Enterprise plan inquiry')
+      : '/signup?plan=' + encodeURIComponent(p.key);
+    const cta = contact
+      ? 'Contact sales'
+      : (free ? 'Start free' : 'Choose ' + esc(p.name));
     return '' +
       '<div class="plan' + (p.popular ? ' popular' : '') + '">' +
         (p.popular ? '<span class="plan-badge">Most popular</span>' : '') +
@@ -38,18 +51,18 @@
         '<p class="plan-tag">' + esc(p.tagline || '') + '</p>' +
         '<div class="plan-price">' +
           '<span class="amt">' + esc(p.price_display) + '</span>' +
-          '<span class="per">' + (free ? 'forever' : 'one-time') + '</span>' +
+          '<span class="per">' + (contact ? '' : (free ? 'forever' : 'one-time')) + '</span>' +
         '</div>' +
         '<div class="plan-credits">' +
-          '<b>' + fmt.int(p.credits) + ' credits</b>' +
+          '<b>' + esc(creditsLabel) + '</b>' +
           '<span>' + esc(per) + '</span>' +
         '</div>' +
         '<ul>' + (p.features || []).map(function (f) {
           return '<li>' + esc(f) + '</li>';
         }).join('') + '</ul>' +
         '<a class="btn ' + (p.popular ? 'btn-primary' : 'btn-ghost') + ' btn-block" ' +
-          'href="/signup?plan=' + encodeURIComponent(p.key) + '">' +
-          (free ? 'Start free' : 'Choose ' + esc(p.name)) +
+          'href="' + href + '">' +
+          cta +
         '</a>' +
       '</div>';
   }).join('');
@@ -60,7 +73,8 @@
     warn.style.maxWidth = '760px';
     warn.style.margin = '0 auto 26px';
     warn.textContent = 'Card payments are not configured on this server yet, so ' +
-      'paid plans cannot be purchased. The free plan works now. ' +
+      'paid plans cannot be purchased. Contact sales for Enterprise, or ask an admin ' +
+      'to configure Square. ' +
       '(Set SQUARE_ACCESS_TOKEN, SQUARE_APPLICATION_ID and SQUARE_LOCATION_ID in .env.)';
   }
 
@@ -70,14 +84,16 @@
       '<td>' + esc(c.label) + '</td>' +
       '<td class="num"><span class="badge badge-info">' + c.credits + '</span></td>' +
       '<td class="num dim">' + fmt.int(Math.floor(1000 / c.credits)) + '</td>' +
-    '</tr>';
+      '</tr>';
   }).join('');
 
   /* ----------------------------------------------------- hero figures --- */
   document.getElementById('stat-endpoints').textContent = data.credit_costs.length;
 
-  // Cheapest plan is the entry price; plans arrive sorted cheapest first.
-  const entry = data.plans[0];
+  // Cheapest purchasable plan is the entry price.
+  const entry = data.plans.find(function (p) {
+    return !p.contact_sales && p.price_cents > 0;
+  }) || data.plans[0];
   if (entry) {
     document.getElementById('stat-entry').textContent = entry.price_display;
   }

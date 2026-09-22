@@ -55,6 +55,7 @@ async def list_plans() -> Dict[str, Any]:
         "credit_costs": cost_table(),
         "currency": settings.SQUARE_CURRENCY,
         "payments_enabled": settings.square_configured(),
+        "sales_email": settings.ADMIN_EMAIL or settings.FROM_EMAIL,
     }
 
 
@@ -128,11 +129,16 @@ async def signup(payload: SignupRequest, background_tasks: BackgroundTasks) -> D
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown plan."
         )
+    if plan.get("contact_sales"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Enterprise is sold through sales. Contact us for a custom quote.",
+        )
 
     await _assert_identity_available(payload.username.strip(), payload.email.strip().lower())
 
     payment: Dict[str, Any] = {}
-    is_free = plan["price_cents"] == 0
+    is_free = plan.get("price_cents") == 0
 
     if not is_free:
         if not payload.source_id:
@@ -222,7 +228,12 @@ async def topup(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown plan."
         )
-    if plan["price_cents"] == 0:
+    if plan.get("contact_sales"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Enterprise is sold through sales. Contact us for a custom quote.",
+        )
+    if not plan.get("price_cents"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The free plan is a one-time signup grant, not a top-up.",

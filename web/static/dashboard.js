@@ -201,7 +201,9 @@
     const payBtn = document.getElementById('topup-pay');
     const hint = document.getElementById('topup-card-hint');
 
-    const paid = plans.filter(function (p) { return p.price_cents > 0; });
+    const paid = plans.filter(function (p) {
+      return p.price_cents > 0 && !p.contact_sales;
+    });
 
     select.innerHTML = paid.map(function (p) {
       return '<option value="' + esc(p.key) + '">' +

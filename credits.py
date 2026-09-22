@@ -27,25 +27,11 @@ logger = logging.getLogger(__name__)
 # price_cents is what Square charges. credits is what lands in the balance.
 # Edit freely - nothing below reads these values positionally.
 CREDIT_PLANS: Dict[str, Dict[str, Any]] = {
-    "starter": {
-        "key": "starter",
-        "name": "Starter",
-        "tier": SubscriptionTier.FREE.value,
-        "price_cents": 200,
-        "credits": 50,
-        "tagline": "Try it on a real shortlist",
-        "features": [
-            "50 credits",
-            "Resume parsing & GitHub analysis",
-            "5 MB max upload",
-            "Community support",
-        ],
-    },
     "basic": {
         "key": "basic",
         "name": "Basic",
         "tier": SubscriptionTier.BASIC.value,
-        "price_cents": 2900,
+        "price_cents": 5900,
         "credits": 1000,
         "tagline": "For small hiring teams",
         "features": [
@@ -59,7 +45,7 @@ CREDIT_PLANS: Dict[str, Dict[str, Any]] = {
         "key": "premium",
         "name": "Premium",
         "tier": SubscriptionTier.PREMIUM.value,
-        "price_cents": 9900,
+        "price_cents": 11100,
         "credits": 5000,
         "tagline": "For scaling recruitment",
         "popular": True,
@@ -74,11 +60,12 @@ CREDIT_PLANS: Dict[str, Dict[str, Any]] = {
         "key": "enterprise",
         "name": "Enterprise",
         "tier": SubscriptionTier.ENTERPRISE.value,
-        "price_cents": 34900,
+        "price_cents": None,
         "credits": 25000,
         "tagline": "High volume, best rate per credit",
+        "contact_sales": True,
         "features": [
-            "25,000 credits",
+            "Custom credit volume",
             "Every endpoint, no daily cap",
             "50 MB max upload",
             "Dedicated support",
@@ -86,9 +73,8 @@ CREDIT_PLANS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# Cheapest plan, used as the default when /signup is opened without ?plan=.
-# There is no $0 plan any more, so every signup takes a card.
-DEFAULT_PLAN_KEY = "starter"
+# Default when /signup is opened without ?plan=. Every purchasable plan is paid.
+DEFAULT_PLAN_KEY = "basic"
 
 
 def get_plan(plan_key: str) -> Optional[Dict[str, Any]]:
@@ -97,16 +83,33 @@ def get_plan(plan_key: str) -> Optional[Dict[str, Any]]:
 
 
 def public_plans() -> List[Dict[str, Any]]:
-    """Plans shaped for the pricing section, cheapest first."""
+    """Plans shaped for the pricing section, purchasable first then contact-sales."""
     out = []
-    for plan in sorted(CREDIT_PLANS.values(), key=lambda p: p["price_cents"]):
-        cents = plan["price_cents"]
+    sorted_plans = sorted(
+        CREDIT_PLANS.values(),
+        key=lambda p: (
+            1 if p.get("contact_sales") else 0,
+            p.get("price_cents") if p.get("price_cents") is not None else 0,
+        ),
+    )
+    for plan in sorted_plans:
+        cents = plan.get("price_cents")
         credits = plan["credits"]
+        contact = bool(plan.get("contact_sales"))
+        if contact:
+            price_display = "Contact sales"
+            per_credit = None
+        elif cents == 0:
+            price_display = "Free"
+            per_credit = None
+        else:
+            price_display = "${:,.0f}".format(cents / 100)
+            per_credit = round(cents / credits / 100, 4)
         out.append(
             {
                 **plan,
-                "price_display": "Free" if cents == 0 else "${:,.0f}".format(cents / 100),
-                "per_credit": None if cents == 0 else round(cents / credits / 100, 4),
+                "price_display": price_display,
+                "per_credit": per_credit,
             }
         )
     return out

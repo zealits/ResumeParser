@@ -342,7 +342,7 @@ code, pre, .mono { font-family: var(--mono); }
 .feature p { margin: 0; font-size: .93rem; }
 
 /* ------------------------------------------------------------- pricing --- */
-.price-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; align-items: start; }
+.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: start; }
 
 .plan {
   background: var(--surface);
